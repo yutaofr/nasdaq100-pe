@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "published-observation.schema.json",
+  "title": "PublishedMetricObservation import package",
+  "type": "object",
+  "required": ["schema_version", "data_mode", "observations"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "data_mode": {"enum": ["real", "synthetic"]},
+    "observations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/observation"}}
+  },
+  "$defs": {
+    "decimal": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"},
+    "observation": {
+      "type": "object",
+      "required": ["observation_id", "provider", "instrument", "metric_label_original", "metric_kind", "value", "unit",
+                   "source_as_of", "observed_at", "source_url", "evidence_sha256", "evidence_locator",
+                   "period_basis", "accounting_basis", "loss_treatment", "methodology_status", "entry_mode"],
+      "properties": {
+        "observation_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "provider": {"type": "string", "minLength": 1, "maxLength": 200},
+        "instrument": {"type": "string", "minLength": 1, "maxLength": 64},
+        "metric_label_original": {"type": "string", "minLength": 1, "maxLength": 200},
+        "metric_kind": {"enum": ["trailing_pe", "forward_pe"]},
+        "value": {"$ref": "#/$defs/decimal"},
+        "unit": {"enum": ["x"]},
+        "source_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "observed_at": {"type": "string", "minLength": 20},
+        "source_url": {"type": "string", "pattern": "^https?://", "maxLength": 2048},
+        "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "evidence_locator": {"type": "string", "minLength": 1, "maxLength": 500},
+        "period_basis": {"enum": ["unknown", "ttm", "forward_12m", "fy1"]},
+        "accounting_basis": {"enum": ["unknown", "gaap", "normalized"]},
+        "loss_treatment": {"enum": ["unknown", "excluded", "included_zero", "included_negative"]},
+        "methodology_status": {"enum": ["unknown", "partial", "disclosed"]},
+        "entry_mode": {"enum": ["manual", "file"]},
+        "basis_evidence": {"type": "string", "maxLength": 500},
+        "corrects_observation_id": {"type": "string", "maxLength": 128},
+        "correction_reason": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    }
+  }
+}

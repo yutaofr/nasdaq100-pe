@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "local-release.schema.json",
+  "type": "object",
+  "required": ["release_id", "deployment_mode", "schema_version", "built_at", "data_modes", "files", "series"],
+  "properties": {
+    "release_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+    "kind": {"enum": ["published", "research"]},
+    "snapshots": {"type": "array", "items": {"type": "object", "required": ["snapshot_id", "series_key", "D", "revision_seq"]}},
+    "deployment_mode": {"const": "local_private"},
+    "schema_version": {"const": "1"},
+    "built_at": {"type": "string"},
+    "data_modes": {"type": "array", "items": {"enum": ["real", "synthetic"]}},
+    "files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+    "series": {"type": "array", "items": {"type": "object", "required": ["series_key", "count", "latest_observed_at"],
+      "properties": {"series_key": {"type": "string"}, "count": {"type": "integer", "minimum": 1}, "latest_observed_at": {"type": "string"}}}}
+  }
+}

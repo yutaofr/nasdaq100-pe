@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "snapshot.schema.json",
+  "type": "object",
+  "required": ["snapshot_id", "schema_version", "method_version", "engine_version", "input_hash", "context", "series_key",
+               "data_mode", "completeness", "publication_status_at_archive", "basket", "results", "subsets", "diagnostics",
+               "securities", "sources", "revision_seq", "last_complete", "created_at"],
+  "properties": {
+    "snapshot_id": {"type": "string", "pattern": "^[0-9a-f]{20}$"},
+    "schema_version": {"const": "1"},
+    "data_mode": {"enum": ["real", "synthetic"]},
+    "completeness": {"type": "object", "required": ["ttm", "fy1"],
+                     "properties": {"ttm": {"enum": ["complete", "partial", "unavailable"]}, "fy1": {"enum": ["complete", "partial", "unavailable"]}}},
+    "revision_seq": {"type": "integer", "minimum": 1},
+    "supersedes_snapshot_id": {"type": ["string", "null"]},
+    "correction_reason": {"type": ["string", "null"]}
+  }
+}

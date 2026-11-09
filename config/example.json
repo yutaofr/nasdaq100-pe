@@ -1,0 +1,9 @@
+{
+  "_说明": "示例配置。DATA_ROOT 必须在服务/代码目录之外；凭证只放本地环境变量或受控文件，不要写进前端构建变量。",
+  "data_root": "~/ndx-pe-data",
+  "host": "127.0.0.1",
+  "port": 8765,
+  "web_root": "apps/web/dist",
+  "sec_user_agent": "ndx-pe 你的名字 your-email@example.com",
+  "deployment_mode": "local_private"
+}

@@ -1,0 +1,14 @@
+{
+  "method_version": "1",
+  "precision": 34,
+  "calc_tolerance": "1e-10",
+  "weight_sum_tolerance": "0.0001",
+  "fixed_basket_max_lag_trading_days": 5,
+  "weekly_max_age_days": 7,
+  "weekly_max_span_days": 7,
+  "daily_freshness_hours": 24,
+  "ttm_max_age_days": 180,
+  "fy1_revision_max_age_days": 30,
+  "strict_cutoff_hour_ny": 12,
+  "sector_taxonomy": "provider-sector-v1"
+}
