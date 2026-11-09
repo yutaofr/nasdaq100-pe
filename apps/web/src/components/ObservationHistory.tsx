@@ -21,10 +21,10 @@ export function ObservationHistory({ series }: { series: Series }) {
       {n >= 2 && (
         <div className="tablewrap">
           <table aria-label={`${p} 历史`}>
-            <thead><tr><th scope="col">观察时间</th><th scope="col">数值（倍）</th><th scope="col">数据日期</th></tr></thead>
+            <thead><tr><th scope="col">观察时间</th><th scope="col">数值（倍）</th><th scope="col">数据日期</th><th scope="col">备注</th></tr></thead>
             <tbody>
               {series.observations.map((o) => (
-                <tr key={o.observation_id}><td>{formatUtc(o.observed_at)}</td><td>{o.value}</td><td>{o.source_as_of ?? "来源未注明"}</td></tr>
+                <tr key={o.observation_id}><td>{formatUtc(o.observed_at)}</td><td>{o.value}</td><td>{o.source_as_of ?? "来源未注明"}</td><td>{o.superseded_by ? "已更正（见后续观察）" : ""}</td></tr>
               ))}
             </tbody>
           </table>

@@ -115,12 +115,14 @@ def build_local_release(selection: ReleaseSelection, store: ArchiveStore) -> Rel
     for o in obs:
         if not (store.root / "raw" / o["evidence_sha256"]).exists():
             raise ReleaseError("EVIDENCE_MISSING", o["observation_id"])
+    sup = {o["corrects_observation_id"]: o["observation_id"] for o in obs if o.get("corrects_observation_id")}
+    obs = [dict(o, superseded_by=sup[o["observation_id"]]) if o["observation_id"] in sup else o for o in obs]
     groups: dict[str, list[dict]] = {}
     for o in obs:
         groups.setdefault(series_key(o), []).append(o)
     series = []
     for k, items in sorted(groups.items()):
-        items.sort(key=lambda o: (o["observed_at"], o["observation_id"]))
+        items.sort(key=lambda o: (o["observed_at"], 1 if o.get("corrects_observation_id") else 0, o["observation_id"]))
         series.append({"series_key": k, "count": len(items), "latest_observed_at": items[-1]["observed_at"],
                        "observations": items})
     files = {

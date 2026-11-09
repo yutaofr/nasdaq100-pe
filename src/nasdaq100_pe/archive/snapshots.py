@@ -11,7 +11,7 @@ from nasdaq100_pe.archive.store import ArchiveError, ArchiveStore, canonical, sh
 
 _DEC = re.compile(r"^-?(0|[1-9][0-9]*)(\.[0-9]+)?$")
 DEC_KEYS = {"weight", "close", "eps", "profit", "market_cap", "pe"}
-TS_KEYS = {"fetched_at"}
+TS_KEYS = {"fetched_at", "checked_at"}
 
 
 def _norm(o, key=None):

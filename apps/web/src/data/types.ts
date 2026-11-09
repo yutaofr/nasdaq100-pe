@@ -19,6 +19,7 @@ export interface Observation {
   methodology_status: string;
   entry_mode: string;
   data_mode: "real" | "synthetic";
+  superseded_by?: string;
 }
 
 export interface Series {

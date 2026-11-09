@@ -3,7 +3,8 @@ import { checkStatus, formatUtc, label, safeHref } from "../data/format";
 import { ObservationHistory } from "./ObservationHistory";
 
 export function PublishedMetricCard({ series, checks, now }: { series: Series; checks: CheckEvent[]; now: Date }) {
-  const o = series.observations[series.observations.length - 1];
+  const live = series.observations.filter((x) => !x.superseded_by);   // 被更正的原值不当作最新
+  const o = live[live.length - 1] ?? series.observations[series.observations.length - 1];
   const st = checkStatus(series, checks, now);
   const href = safeHref(o.source_url);
   return (

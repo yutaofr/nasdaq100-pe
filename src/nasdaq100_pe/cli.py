@@ -81,6 +81,16 @@ def _cmd_build_local(args) -> int:
     ids = [b for b in (args.observations or "").split(",") if b] or None
     snaps = [x for x in (args.snapshot or "").split(",") if x] or None
     name = "research" if snaps else "local"
+    if snaps:   # 研究发布累积：并入当前研究发布已有快照，避免新日期构建因“丢历史”被拒
+        from nasdaq100_pe.archive.snapshots import list_snapshots
+        cur = current_release(store, "research")
+        keep = []
+        if cur:
+            mf = store.root / "releases" / cur / "manifest.json"
+            keep = [x["snapshot_id"] for x in json.loads(mf.read_text()).get("snapshots", [])] if mf.exists() else []
+        if snaps == ["all"]:
+            snaps = [s["snapshot_id"] for s in list_snapshots(store)]
+        snaps = sorted(set(keep) | set(snaps))
     try:
         rel = build_local_release(ReleaseSelection(batch_ids=None if snaps else ids, snapshot_ids=snaps, data_mode=args.data_mode), store)
     except ReleaseError as e:

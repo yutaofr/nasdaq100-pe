@@ -35,6 +35,7 @@ class AnalysisContext:
     def __post_init__(self):
         if self.T.tzinfo is None:
             raise EligibilityError("NAIVE_TIME", "T 须带时区")
+        object.__setattr__(self, "T", self.T.astimezone(timezone.utc))
         if self.analysis_profile not in ("strict", "research") or self.basket_policy not in ("current", "fixed") \
                 or self.coverage_policy not in ("full", "subset") or self.freshness_policy not in ("daily", "weekly"):
             raise EligibilityError("INVALID_COMBINATION", "未知模式取值")
@@ -42,7 +43,7 @@ class AnalysisContext:
             raise EligibilityError("INVALID_COMBINATION", "strict 固定为 current/full/daily")
 
     def as_dict(self) -> dict:
-        return {"W": self.W.isoformat(), "D": self.D.isoformat(), "T": self.T.isoformat(), "analysis_profile": self.analysis_profile,
+        return {"W": self.W.isoformat(), "D": self.D.isoformat(), "T": self.T.astimezone(timezone.utc).isoformat(), "analysis_profile": self.analysis_profile,
                 "basket_policy": self.basket_policy, "coverage_policy": self.coverage_policy,
                 "freshness_policy": self.freshness_policy, "method_version": self.method_version, "data_mode": self.data_mode}
 
@@ -70,7 +71,12 @@ def assess_eligibility(inputs: InputValidation, context: AnalysisContext, calend
     c, pol = context, context.policy
     if c.analysis_profile == "strict" and c.T > strict_cutoff(c.D):
         raise EligibilityError("STRICT_CUTOFF_EXCEEDED", "strict 截止为 D 后一个自然日纽约12:00")
+    ws = inputs.basket.weights
+    if ws.date != c.W.isoformat() or (inputs.universe.as_of and inputs.universe.as_of != c.W.isoformat()):
+        raise EligibilityError("WEIGHT_DATE_MISMATCH", "篮子日 W 必须等于权重/名单证据日期")
     try:
+        if not calendar.is_trading_day(c.D):
+            raise EligibilityError("D_NOT_TRADING_DAY", f"价格日 {c.D} 不是交易日")
         if c.basket_policy == "current":
             if c.W != c.D:
                 raise EligibilityError("WEIGHT_DATE_MISMATCH", "current 篮子要求权重日等于价格日")
@@ -88,9 +94,9 @@ def assess_eligibility(inputs: InputValidation, context: AnalysisContext, calend
     used_fetch: list[datetime] = []
 
     def fresh(row, sid, kind=None) -> bool:
-        f = _dt(row["fetched_at"])
+        f = _dt(row.get("checked_at") or row["fetched_at"])      # 最新性看复核时间；内容获取时间只作出处
         code = None
-        if f > c.T:
+        if f > c.T or _dt(row["fetched_at"]) > c.T:
             code = "SOURCE_AFTER_CUTOFF"
         elif c.freshness_policy == "weekly" and c.T - f > timedelta(days=pol.weekly_max_age_days):
             code = "STALE_FETCH"
@@ -109,6 +115,14 @@ def assess_eligibility(inputs: InputValidation, context: AnalysisContext, calend
             diags.append({"code": "PRICE_DATE_MISMATCH", "security_id": sid}); continue
         if p.get("price_type") != "regular_close":
             diags.append({"code": "PRICE_TYPE_INVALID", "security_id": sid}); continue
+        if (p.get("currency") or "").upper() != "USD":
+            diags.append({"code": "CURRENCY_NOT_USD", "security_id": sid}); continue
+        if (p.get("session") or "regular") != "regular" or (p.get("adjustment") or "raw") != "raw":
+            diags.append({"code": "NOT_REGULAR_CLOSE", "security_id": sid}); continue
+        if "feed" in p and (p["feed"] or "").lower() not in ("sip", "consolidated", "official_close", "exchange_official"):
+            diags.append({"code": "FEED_NOT_CONSOLIDATED", "security_id": sid}); continue
+        if c.data_mode == "real" and not (p.get("split_basis_date") and p.get("evidence_sha256") and p.get("locator")):
+            diags.append({"code": "PRICE_NO_EVIDENCE", "security_id": sid}); continue
         if sid in prices:
             diags.append({"code": "PRICE_DUPLICATE", "security_id": sid}); prices.pop(sid); continue
         if fresh(p, sid, "price"):

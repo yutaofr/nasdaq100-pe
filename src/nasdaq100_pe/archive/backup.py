@@ -10,7 +10,7 @@ from pathlib import Path
 
 from nasdaq100_pe.archive.store import ArchiveStore, canonical, sha256
 
-DIRS = ["raw", "observations", "batches", "research_inputs", "snapshots", "checks", "runs", "sec_cache"]
+DIRS = ["raw", "observations", "batches", "research_inputs", "snapshots", "checks", "runs", "sec_cache", "supplements"]
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
 
 

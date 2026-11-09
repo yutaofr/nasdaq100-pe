@@ -36,7 +36,10 @@ def build(fetched=None, ttm_q=date(2026, 9, 30), fy_upd=date(2026, 10, 20), pric
     return validate_research_input(dump(d), M)
 
 
-def run(iv, c):
+def run(iv, c, align=True):
+    if align:   # 权重/名单证据日期=W（W≠证据日期的拒绝见 tests/test_review_fixes.py）
+        iv.basket.weights.date = c.W.isoformat()
+        iv.universe.as_of = c.W.isoformat()
     return assess_eligibility(iv, c, CAL)
 
 

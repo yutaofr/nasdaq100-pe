@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from importlib import resources
 from pathlib import Path
 
@@ -112,6 +112,8 @@ def validate_published(payload: bytes) -> PublishedImportResult:
         return _fail(diags)
 
     obs = [{k: o[k] for k in _FIELDS if k in o} for o in data["observations"]]
+    for o in obs:   # 归档统一 UTC（ADD §4.1），避免混合偏移导致字符串排序错误
+        o["observed_at"] = datetime.fromisoformat(o["observed_at"]).astimezone(timezone.utc).isoformat()
     kinds = {o["metric_kind"] for o in obs}
     return PublishedImportResult(
         ok=True, exit_code=0, data_mode=data["data_mode"], observations=obs,

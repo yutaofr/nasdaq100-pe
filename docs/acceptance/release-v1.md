@@ -49,7 +49,14 @@ Chrome 156.0.8078.80；390×844；冷缓存；CPU 4×降速；10Mbps 下行/1Mbp
 
 `scripts/verify-local.sh` 最后一次输出（2026-11-09）：backend 266 passed / 1 skipped；web unit 36 passed；build ok；e2e 28 passed；`ALL CHECKS PASSED`。
 
-## 6. 评审方式
+## 6. 独立评审（提交 2e18e89，Opus 评审者，只读）
+
+结论：无 Critical，8 条 Important，已在同一轮全部修复（每条先写失败测试，见 `tests/test_review_fixes.py`；修复后后端 294 通过/1 跳过，前端 37，E2E 28）：
+1. 篮子日 W 必须等于 `weights.date` / `universe.as_of`（含 strict）；2. 更正后的原值不再当最新，历史标“已更正”；3. 观察时间与 T 统一 UTC；4. 研究路径强制 USD / 常规收盘，真实模式要求价格证据；5. 备份包含 `supplements/`；6. 财报新鲜度看 `checked_at`，`fetched_at` 仅作出处；7. 研究发布按“并入当前发布”累积，修订比较取每键最大值；8. D 必须是交易日、未知日历拒绝，日历按 `config/calendar_us_YYYY.json` 多文件合并（**现有日历止于 2026-12-31，2027 年需核对交易所公告后新增文件**）。
+
+延后的 Minor（未改）：`build-local` 的 CAS 期望值在构建后才读取；引用发布水位未含 `checks.json`；`--web-root` 未强制不含 DATA_ROOT；密钥扫描漏 JSON 形式 `"api_key": "x"` 且用未 resolve 的路径；SEC 缓存元数据非原子写；无 `fetch_earnings` CLI；重复价格/盈利行第三条会被重新放入；研究历史按 T 而非 D 排序且被取代的修订仍画点；总市值恒不可用（未接入）；缺 `data_mode` 的研究输入默认标合成；导入/研究运行无写锁。
+
+## 7. 评审方式（此前）
 
 本轮在单一会话内按任务逐个 TDD 实施，没有派发独立评审者；§2 的变异检查（人为破坏规则、确认测试变红）覆盖了篮子校验、计算内核与资格边界，但**这不等同于第二双眼睛**。合并/交付前建议另行评审，重点：发布指针 CAS 与回退判定（`publisher/pointer.py`）、资格边界（`validate/eligibility.py`）、SEC 季度选择（`normalize/quarters.py`）。
 

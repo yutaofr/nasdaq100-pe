@@ -171,3 +171,16 @@ describe("请求乱序与失败", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/无法读取/);
   });
 });
+
+describe("更正", () => {
+  it("卡片显示更正后的值；历史标注已更正", async () => {
+    const orig = ob({ observation_id: "z-orig", value: "258.5", superseded_by: "a-fix" });
+    const fix = ob({ observation_id: "a-fix", value: "25.85" });
+    renderApp(loaderFor(rel("r1", [series([orig, fix])])));
+    const t = await screen.findByRole("region", { name: /滚动 PE/ });
+    expect(within(t).getByText("25.85", { selector: ".value span" })).toBeInTheDocument();
+    expect(within(t).queryByText("258.5", { selector: ".value span" })).toBeNull();
+    const tbl = within(t).getByRole("table", { name: /历史/ });
+    expect(within(tbl).getByText(/已更正/)).toBeInTheDocument();
+  });
+});

@@ -68,8 +68,14 @@ def _regresses(new: dict, cur: dict) -> bool:
     if cur.get("kind") == "research" or new.get("kind") == "research":
         if cur.get("kind") != new.get("kind"):
             return True
-        nw = {(x["series_key"], x["D"]): x["revision_seq"] for x in new["snapshots"]}
-        return any(k not in nw or nw[k] < v for k, v in ((((x["series_key"], x["D"]), x["revision_seq"])) for x in cur["snapshots"]))
+        def top(m):
+            out: dict = {}
+            for x in m["snapshots"]:
+                k = (x["series_key"], x["D"])
+                out[k] = max(out.get(k, 0), x["revision_seq"])
+            return out
+        nw, cw = top(new), top(cur)
+        return any(k not in nw or nw[k] < v for k, v in cw.items())
     nw, cw = _watermarks(new), _watermarks(cur)
     return any(k not in nw or nw[k] < v for k, v in cw.items())
 

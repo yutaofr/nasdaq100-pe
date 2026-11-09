@@ -22,11 +22,25 @@ class TradingCalendar:
     half_days: frozenset
 
     @staticmethod
-    def load(path: Path | None = None) -> "TradingCalendar":
-        p = path or Path(__file__).resolve().parent / "config" / "calendar_us_2026.json"
+    def _one(p: Path) -> "TradingCalendar":
         j = json.loads(p.read_text(encoding="utf-8"))
         return TradingCalendar(j["version"], date.fromisoformat(j["covers_from"]), date.fromisoformat(j["covers_to"]),
                                frozenset(map(date.fromisoformat, j["closed"])), frozenset(map(date.fromisoformat, j["half_days"])))
+
+    @staticmethod
+    def load(path: Path | None = None) -> "TradingCalendar":
+        """未指定文件时合并 config/ 下全部 calendar_us_*.json（新增年份只需加文件）。"""
+        if path is not None:
+            return TradingCalendar._one(Path(path))
+        return TradingCalendar.load_dir(Path(__file__).resolve().parent / "config")
+
+    @staticmethod
+    def load_dir(d: Path) -> "TradingCalendar":
+        cals = [TradingCalendar._one(p) for p in sorted(Path(d).glob("calendar_us_*.json"))]
+        if not cals:
+            raise FileNotFoundError("无交易日历文件")
+        return TradingCalendar("+".join(c.version for c in cals), min(c.covers_from for c in cals), max(c.covers_to for c in cals),
+                               frozenset().union(*(c.closed for c in cals)), frozenset().union(*(c.half_days for c in cals)))
 
     def _check(self, d: date):
         if not (self.covers_from <= d <= self.covers_to):

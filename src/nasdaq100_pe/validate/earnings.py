@@ -37,7 +37,7 @@ class EarningsValidation:
         b = self.batch
         return [{"security_id": r["security_id"], "kind": "ttm", "eps": r["eps"], "accounting_basis": "gaap", "currency": r["currency"],
                  "split_basis_date": b.split_basis_date, "latest_quarter_end": r["latest_quarter_end"],
-                 "fetched_at": b.content_fetched_at, "calculation_path": r["calculation_path"],
+                 "fetched_at": b.content_fetched_at, "checked_at": b.checked_at, "calculation_path": r["calculation_path"],
                  "evidence": {"cik": b.cik, "content_sha256": b.content_sha256, "quarters": r["quarters"]}}
                 for r in self.rows if r["status"] == "ok"]
 
