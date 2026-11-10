@@ -1,8 +1,27 @@
 """研究输入合成夹具（仅测试；data_mode 由调用方标明为合成）。"""
 import copy
 import json
+from datetime import date, timedelta
+from decimal import Decimal
 
 H = "c" * 64
+
+
+def ttm_evidence(eps, latest_quarter_end="2026-09-30"):
+    """Four synthetic consecutive reported quarters whose sum is eps."""
+    end = date.fromisoformat(latest_quarter_end)
+    value = str(Decimal(str(eps)) / 4)
+    quarters = []
+    for n in reversed(range(4)):
+        qend = end - timedelta(days=91 * n)
+        start = qend - timedelta(days=90)
+        quarters.append({"start": start.isoformat(), "end": qend.isoformat(), "val": value,
+                         "filed": (qend + timedelta(days=30)).isoformat(), "accn": f"synthetic-{n}",
+                         "form": "10-Q", "fp": f"Q{4-n}", "manual": False})
+    return {"quarters": quarters, "calculation_path": "reported_quarter_eps_sum",
+            "evidence": {"cik": "synthetic", "content_sha256": H,
+                         "locator": "us-gaap/EarningsPerShareDiluted/USD/shares", "quarters": quarters},
+            "source_id": "s1"}
 
 
 def sec(sid, issuer=None, cls="common", ticker=None, sector="Tech", **kw):

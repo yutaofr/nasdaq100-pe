@@ -9,13 +9,15 @@ const SECTIONS: { kind: MetricKind; title: string }[] = [
 
 export function PublishedPage({ now }: { now: Date }) {
   const { phase, release, error } = useRelease();
-  if (phase === "loading") return <p>加载中…</p>;
+  const intro = <><h2>外部估值对照（来源公布，非本站自算）</h2><p className="note">此页仅供对照；来源公布的 PE 不进入首页自算结果，也不填补自算数据缺口。</p></>;
+  if (phase === "loading") return <>{intro}<p>加载中…</p></>;
   if (!release) {
-    if (phase === "error") return <p role="alert">无法读取已发布数据：{error}</p>;
-    return <p>尚无已发布数据。请先用命令行导入并构建引用指标；研究页不受影响。</p>;
+    if (phase === "error") return <>{intro}<p role="alert">无法读取已发布数据：{error}</p></>;
+    return <>{intro}<p>尚无已发布数据。请先用命令行导入并构建引用指标；自算首页不受影响。</p></>;
   }
   return (
     <>
+      {intro}
       {error && <p role="alert" className="alert">刷新失败，当前显示上一可核实版本：{error}</p>}
       {SECTIONS.map(({ kind, title }) => {
         const list = release.observations.series.filter((s) => s.observations[0]?.metric_kind === kind);

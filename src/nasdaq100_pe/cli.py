@@ -120,11 +120,12 @@ def _cmd_check_published(args) -> int:
 
 def _ctx(args, data_mode="synthetic"):
     from datetime import date, datetime, timezone
+    from nasdaq100_pe.method import MethodSpec
     from nasdaq100_pe.validate.eligibility import AnalysisContext, EligibilityError
     t = datetime.fromisoformat(args.observed_at) if args.observed_at else datetime.now(timezone.utc)
     return AnalysisContext(W=date.fromisoformat(args.basket_date), D=date.fromisoformat(args.price_date), T=t,
                            analysis_profile=args.profile, basket_policy=args.basket, coverage_policy=args.coverage,
-                           freshness_policy=args.freshness, method_version="1", data_mode=data_mode)
+                           freshness_policy=args.freshness, method_version=MethodSpec.load().method_version, data_mode=data_mode)
 
 
 def _cmd_validate(args) -> int:

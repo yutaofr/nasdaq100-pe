@@ -1,8 +1,10 @@
 # 纳指100估值看板（本机个人使用）
 
 零数据采购预算、只绑定 `127.0.0.1` 的中文估值看板：
-- **整体估值参考**：展示来源公布的滚动 PE / Forward PE，附来源、原名、数据日期、观察时间、口径限制与原件哈希；
-- **自主计算研究**（观察时点研究）：完整篮子 + 有效价格 + 逐步补齐的 TTM，显示覆盖率、缺失清单与公式；缺数据时说明具体缺口，不用合成数值冒充。
+- **自主计算估值（首页 `#/`）**：按 SRD §3 将各证券权重乘以盈利收益率后求和，再取倒数计算组合 PE。TTM 使用已报告 GAAP 盈利（优先四个已报告单季 EPS 之和；缺单季值时用已报告归母净利润 ÷ 稀释股数 × 股价，方法版本 2，见 `docs/ADD.md` §5.3），FY1 使用下一财年 normalized 一致预期；负盈利保留，缺失不填零。数据不完整时显示覆盖与缺口；覆盖权重 ≥90% 时显示“已覆盖部分 PE”并标明覆盖率，否则留空。完整 PE 只在全部齐备时显示。
+- **外部估值对照（`#/reference`）**：单独展示来源公布的滚动 PE / Forward PE，附来源、原名、日期、口径限制与原件哈希；这些数字不作为首页自算 PE 的替代。
+
+`#/research` 保留为自算首页的兼容入口。2026-11-09 用户纠正了 2026-11-08 ADD 中“引用指标作为首页”的降级策略；ADD 保留原决策供追溯，以本次纠正为准。
 
 设计与验收见 `docs/ADD.md`、`docs/superpowers/plans/…`、`docs/acceptance/release-v1.md`。
 
@@ -19,7 +21,7 @@ export NDX_PE_DATA_ROOT=~/ndx-pe-data/store   # 数据根目录，必须在代�
 
 ## 日常操作
 
-### 1. 引用指标（首页）
+### 1. 外部估值对照（`#/reference`）
 1. 手工取得来源原件（PDF/HTML），放进一个证据目录；计算其 SHA-256。
 2. 写 JSON 输入（字段见 `schemas/published-observation.schema.json`）：`source_as_of` 页面未注明就填 `null`，口径未知填 `unknown`，不要从名称推断。
 3. 校验 / 归档 / 构建 / 打开 / 导出：
@@ -37,7 +39,7 @@ ndx-pe build-local
 ```
 页面据最后一次“有证据的检查”+7 天判断“周度检查逾期”；单纯刷新页面不会改变检查时间。库内同时有真实与演示数据时，`build-local` 需 `--data-mode real|synthetic`。
 
-### 2. 自主计算研究
+### 2. 自主计算估值（首页 `#/`）
 ```bash
 ndx-pe validate --input research.json                                     # 结构/语义/覆盖报告，不发布
 ndx-pe import --file research.json --basket-date 2026-11-06 --price-date 2026-11-06   # 归档并生成不可变快照
@@ -47,6 +49,14 @@ ndx-pe build-local --snapshot SNAPSHOT_ID                                 # 研�
 ndx-pe check-prices --input research.json --prices prices.csv --basket-date … --price-date …
 ```
 研究输入格式见 `tests/research_fixtures.py`（最小可用样例）与 `docs/ADD.md` §4。默认模式 `research/current/subset/weekly`；`--profile strict` 只允许 `current/full/daily`。
+
+### 2a. 用已归档证据批量生成真实输入（方法版本 2）
+```bash
+python scripts/collect_nocp.py --input BASKET.json --evidence EVIDENCE_DIR --target-date D --index OUT/nocp-index.json   # 联网：每只证券一次 Nasdaq 官方收盘价；接口只回最近 5 个交易日
+python scripts/build_research_v2.py --base-input BASKET.json --nocp-index OUT/nocp-index.json --store $NDX_PE_DATA_ROOT \
+    --price-date D --observed-at T --output OUT        # 离线：读 SEC 缓存，写 research-input-v2.json 与逐证券 coverage-report-v2.csv
+```
+没通过核对的证券不会生成盈利行，原因写在 `coverage-report-v2.csv`；人工裁定不纳入的用 `--exclude 'TICKER=原因'`。
 
 ### 2b. TTM 缺 Q4 时人工补录
 SEC companyfacts 不给 Q4 单季 EPS，TTM 会显示 `missing_quarter`。从 8-K/业绩公告取得该季“已报告”稀释 EPS（禁止用全年−九个月推算），保存原件，写补录 JSON：

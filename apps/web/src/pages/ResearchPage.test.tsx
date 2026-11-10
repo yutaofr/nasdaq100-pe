@@ -17,7 +17,7 @@ describe("研究页：标识与模式", () => {
     expect(screen.getByText("纳指100估值估算（QQQ股票持仓代理）")).toBeInTheDocument();
     expect(screen.getByText("非同步周度观察")).toBeInTheDocument();
     expect(screen.getByText(/篮子日 W：2026-11-06/)).toBeInTheDocument();
-    expect(screen.getByText(/价格日 D：2026-11-06/)).toBeInTheDocument();
+    expect(screen.getByText(/目标价格日 D：2026-11-06/)).toBeInTheDocument();
     expect(screen.getByText(/观察时点 T：2026-11-08 12:00 UTC/)).toBeInTheDocument();
     expect(screen.getByText("演示数据")).toBeInTheDocument();
   });
@@ -59,6 +59,8 @@ describe("概览格子与状态", () => {
     await screen.findByRole("heading", { name: /观察时点研究/ });
     expect(screen.getByTestId("status-ttm")).toHaveTextContent("部分覆盖");
     expect(screen.getByTestId("status-fy1")).toHaveTextContent("不可用");
+    expect(screen.getByTestId("status-ttm")).toHaveTextContent("未形成完整自算 PE");
+    expect(screen.getByTestId("status-fy1")).toHaveTextContent("未形成完整自算 PE");
   });
 
   it("完整正收益：PE 两位小数+倍、收益率两位百分数、100元解释与限制", async () => {
@@ -199,5 +201,49 @@ describe("请求乱序与失败（研究）", () => {
     act(() => ctl.reload());
     expect(await screen.findByRole("alert")).toHaveTextContent(/研究数据刷新失败/);
     expect(screen.getByRole("table", { name: "成分明细" })).toBeInTheDocument();
+  });
+});
+
+describe("已覆盖部分 PE 的展示门槛", () => {
+  const withSubset = (over: Record<string, unknown>) => {
+    const s = snap();
+    s.subsets.ttm = { ...s.subsets.ttm, coverage_ratio: "0.8", min_coverage: "0.9", display_qualified: false, ...over };
+    return s;
+  };
+
+  it("达到门槛：TTM 卡片显示已覆盖部分 PE、覆盖率与“非完整指数 PE”，状态仍为部分覆盖", async () => {
+    const s = withSubset({ coverage_ratio: "0.915", display_qualified: true, pe: "27.71", subset_yield: "0.03609" });
+    s.diagnostics = [{ code: "TTM_NET_INCOME_PATH", security_id: "b", kind: "ttm" }];
+    renderResearch(rrel("r1", [s]));
+    expect(await screen.findByTestId("val-ttm-pe")).toHaveTextContent("27.71 倍");
+    const card = document.querySelector("[data-overview='ttm-pe']") as HTMLElement;
+    expect(within(card).getByTestId("scope-ttm")).toHaveTextContent(/覆盖权重 91\.50%.*1 只未计入.*非完整指数 PE/);
+    expect(screen.getByTestId("val-ttm-yield")).toHaveTextContent("3.61%");
+    expect(screen.getByTestId("status-ttm")).toHaveTextContent("部分覆盖；显示已覆盖部分 PE，未形成完整自算 PE");
+    expect(screen.getByTestId("ni-path-count")).toHaveTextContent("其中 1 只证券");
+    expect(document.body.textContent).not.toMatch(/100元/);           // 不把部分覆盖当完整结果解释
+  });
+
+  it("未达门槛或旧快照没有门槛字段：PE 留空", async () => {
+    renderResearch(rrel("r1", [withSubset({})]));
+    expect(await screen.findByTestId("val-ttm-pe")).toHaveTextContent("— 盈利未完整");
+    expect(screen.queryByTestId("scope-ttm")).toBeNull();
+    expect(screen.getByText(/覆盖权重 80\.00%（展示门槛 90\.00%）/)).toBeInTheDocument();
+  });
+
+  it("FY1 不可用时不受 TTM 展示影响", async () => {
+    renderResearch(rrel("r1", [withSubset({ coverage_ratio: "0.95", display_qualified: true })]));
+    expect(await screen.findByTestId("val-fy1-pe")).toHaveTextContent("— 无有效盈利");
+  });
+});
+
+describe("缺失清单", () => {
+  it("超过 12 只时折叠，数量仍可见，不把 PE 卡片挤到屏幕之外", async () => {
+    const s = snap();
+    s.results.metrics.ttm.missing_security_ids = Array.from({ length: 13 }, (_, i) => `m${i}`);
+    renderResearch(rrel("r1", [s]));
+    const sum = await screen.findByText("缺失证券（13 只，点击展开）");
+    expect((sum.closest("details") as HTMLDetailsElement).open).toBe(false);
+    expect(sum.closest("details")).toHaveTextContent("m12");
   });
 });

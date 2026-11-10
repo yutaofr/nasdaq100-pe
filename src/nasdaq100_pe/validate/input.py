@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from nasdaq100_pe.dec import BadDecimal, D
 from nasdaq100_pe.identity.models import SecurityIdentity, Universe
 from nasdaq100_pe.method import MethodSpec
+from nasdaq100_pe.normalize.net_income import PATH as NET_INCOME_PATH
 from nasdaq100_pe.validate.basket import BasketResult, validate_basket
 
 MAX_BYTES = 20 * 1024 * 1024
@@ -84,7 +85,12 @@ def validate_research_input(payload: bytes, policy: MethodSpec) -> InputValidati
         try:
             if e["security_id"] not in ids or e["kind"] not in ("ttm", "fy1"):
                 raise BadDecimal("earnings")
-            D(e["eps"])
+            if e.get("calculation_path") == NET_INCOME_PATH:
+                if e["kind"] != "ttm" or e.get("eps") is not None or D(e["shares"]) <= 0:
+                    raise BadDecimal("net income path")
+                D(e["profit"])
+            else:
+                D(e["eps"])
             for req in ("accounting_basis", "currency"):
                 if req not in e:
                     raise KeyError(req)

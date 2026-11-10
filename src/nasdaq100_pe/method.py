@@ -7,7 +7,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class MethodSpec:
-    method_version: str = "1"
+    method_version: str = "2"
     precision: int = 34
     calc_tolerance: str = "1e-10"
     weight_sum_tolerance: str = "0.0001"
@@ -18,6 +18,7 @@ class MethodSpec:
     ttm_max_age_days: int = 180
     fy1_revision_max_age_days: int = 30
     strict_cutoff_hour_ny: int = 12
+    subset_display_min_coverage: str = "0.9"   # 方法版本≥2：覆盖权重达到该比例才展示已覆盖部分 PE
     sector_taxonomy: str = "provider-sector-v1"
 
     @staticmethod

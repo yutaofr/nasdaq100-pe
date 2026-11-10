@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -61,15 +61,12 @@ def _compute(raw_bytes: bytes, context: AnalysisContext, calendar: TradingCalend
         return val, None, val.diagnostics
     if not val.basket.qualified:
         return val, None, val.diagnostics
-    if not val.prices:
-        return val, None, val.diagnostics + [{"code": "NO_PRICES", "message": "缺少必要价格集，不发布新计算快照"}]
     try:
         elig = assess_eligibility(val, context, calendar)
     except EligibilityError as e:
         return val, None, val.diagnostics + [{"code": e.code, "message": str(e)}]
-    res = calculate(elig, context.policy)
-    if all(m.eligibility == "unavailable" for m in res.metrics.values()):
-        return val, None, val.diagnostics + elig.diagnostics + [{"code": "NO_USABLE_EARNINGS", "message": "无任何有效盈利，不发布新计算快照"}]
+    # 结果里的方法版本取自快照上下文，而不是当前配置：旧方法版本的快照须能原样复算
+    res = calculate(elig, replace(context.policy, method_version=context.method_version))
     ws = val.basket.weights
     core = {
         "completeness": {k: m.eligibility for k, m in res.metrics.items()},
@@ -84,10 +81,21 @@ def _compute(raw_bytes: bytes, context: AnalysisContext, calendar: TradingCalend
                    "unknown_excluded_items": ws.unknown_excluded_items, "excluded": ws.excluded,
                    "index_comparability": elig.index_comparability},
         "results": res.to_dict(),
-        "subsets": ({k: _plain(calculate_subset(res, k)) for k in ("ttm", "fy1")} if context.coverage_policy == "subset" else {}),
+        "subsets": ({k: _subset(res, k, context) for k in ("ttm", "fy1")} if context.coverage_policy == "subset" else {}),
         "diagnostics": val.diagnostics + elig.diagnostics,
     }
     return val, core, []
+
+
+V2_SUBSET_KEYS = ("coverage_ratio", "min_coverage", "display_qualified")
+
+
+def _subset(res, kind: str, context: AnalysisContext) -> dict:
+    if context.method_version == "1":       # 旧快照须逐字节可复算：不带方法版本 2 的展示字段
+        d = _plain(calculate_subset(res, kind))
+        return {k: v for k, v in d.items() if k not in V2_SUBSET_KEYS}
+    from nasdaq100_pe.dec import D
+    return _plain(calculate_subset(res, kind, D(context.policy.subset_display_min_coverage)))
 
 
 def _plain(o):
@@ -112,6 +120,9 @@ def run_import(path: Path, context: AnalysisContext, store: ArchiveStore, *, rea
         run.exit_code, run.diagnostics = 2, val.diagnostics
         return _finish(store, run)
     cb = canonical_input_bytes(val.raw) if val.raw else None
+    if core is not None and cb is not None:
+        # Snapshot results must be calculated from the exact bytes archived for recompute.
+        val, core, errs = _compute(cb, context, cal)
     if val.exit_code == 0 and cb:
         run.input_hash = save_input(store, cb)       # 归档输入证据（含被拒的诊断依据）
     store._crash("before_snapshot")

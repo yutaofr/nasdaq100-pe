@@ -12,7 +12,7 @@ from nasdaq100_pe.pipeline import recompute, recompute_package, run_import
 from nasdaq100_pe.publisher.local import ReleaseError, ReleaseSelection, build_local_release
 from nasdaq100_pe.publisher.pointer import current_release, promote_release
 from nasdaq100_pe.validate.eligibility import AnalysisContext
-from tests.research_fixtures import base_input, dump, mod
+from tests.research_fixtures import base_input, dump, mod, ttm_evidence
 
 D0 = date(2026, 11, 6)
 T = datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc)
@@ -32,7 +32,8 @@ def full(eps=("5", "4", "2"), only=None, scope="full", fetched=FETCH, ttm_q="202
     d["prices"] = [{"security_id": s, "date": D0.isoformat(), "close": "100", "currency": "USD", "price_type": "regular_close",
                     "split_basis_date": "2026-01-01", "source_id": "s1", "fetched_at": fetched} for s in ids]
     d["earnings"] = [{"security_id": s, "kind": "ttm", "eps": e, "accounting_basis": "gaap", "currency": "USD",
-                      "split_basis_date": "2026-01-01", "latest_quarter_end": ttm_q, "fetched_at": fetched}
+                      "split_basis_date": "2026-01-01", "latest_quarter_end": ttm_q, "fetched_at": fetched,
+                      **ttm_evidence(e, ttm_q)}
                      for s, e in zip(ids, eps) if only is None or s in only]
     return d
 
@@ -74,10 +75,13 @@ def test_missing_complete_basket_no_snapshot_keeps_diagnostics_and_old_release(t
     assert len(list_snapshots(store)) == 1
 
 
-def test_no_prices_blocks_snapshot(tmp_path, store):
+def test_no_prices_archives_unavailable_snapshot(tmp_path, store):
     d = full(); d["prices"] = []
     r = run_import(write(tmp_path, d), ctx(), store)
-    assert r.exit_code == 4 and r.snapshot_id is None
+    assert r.exit_code == 0 and r.snapshot_id is not None
+    assert r.completeness == {"ttm": "unavailable", "fy1": "unavailable"}
+    snap = read_snapshot(store, r.snapshot_id)
+    assert snap["results"]["metrics"]["ttm"]["pe"] is None
 
 
 def test_structural_error_exit_4_input_error_exit_2(tmp_path, store):
@@ -115,6 +119,18 @@ def test_recompute_matches_archived(tmp_path, store):
     r = run_import(write(tmp_path, full()), ctx(), store)
     out = recompute(r.snapshot_id, store)
     assert out["identical"] is True
+
+
+def test_recompute_matches_unsorted_complete_basket(tmp_path, store):
+    d = full()
+    d["universe"]["securities"].reverse()
+    d["weights"]["excluded"] = [
+        {"asset_class": "other", "label": "z", "weight": "0"},
+        {"asset_class": "cash", "label": "a", "weight": "0"},
+    ]
+    r = run_import(write(tmp_path, d), ctx(), store)
+    assert r.exit_code == 0 and r.snapshot_id
+    assert recompute(r.snapshot_id, store)["identical"] is True
 
 
 def test_correction_supersedes_and_old_remains_readable(tmp_path, store):

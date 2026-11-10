@@ -6,7 +6,7 @@ const RUNS = 5;
 const LCP_LIMIT_MS = 3000;
 const TRANSFER_LIMIT = 500 * 1024;
 
-test("约110条证券 · 研究页 LCP 与压缩传输", async () => {
+test("约110条证券 · 自算首页 LCP 与压缩传输", async () => {
   const browser = await chromium.launch({ channel: "chrome" });
   const version = browser.version();
   const results: { lcp: number; transferBytes: number }[] = [];
@@ -24,7 +24,7 @@ test("约110条证券 · 研究页 LCP 与压缩传输", async () => {
       (window as any).__lcp = 0;
       new PerformanceObserver((l) => { for (const e of l.getEntries()) (window as any).__lcp = e.startTime; }).observe({ type: "largest-contentful-paint", buffered: true });
     });
-    await page.goto("/#/research");
+    await page.goto("/");
     await page.getByRole("table", { name: "成分明细" }).waitFor();
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(800);

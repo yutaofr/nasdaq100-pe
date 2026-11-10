@@ -10,6 +10,8 @@ const both = () => rel("r1", [
   series([ob({ observation_id: "f1", provider: "StockAnalysis", metric_kind: "forward_pe", metric_label_original: "Forward PE", value: "27.10", source_as_of: null })]),
 ]);
 
+beforeEach(() => { window.location.hash = "#/reference"; });
+
 function renderApp(loader: Loader, now = NOW) { return render(<App loader={loader} now={now} />); }
 
 describe("整体估值参考", () => {
@@ -50,10 +52,10 @@ describe("整体估值参考", () => {
     expect(await screen.findByText("演示数据")).toBeInTheDocument();
   });
 
-  it("无release显示空状态，研究入口仍在", async () => {
+  it("无release显示空状态，自算首页入口仍在", async () => {
     renderApp(loaderFor(null));
     expect(await screen.findByText(/尚无已发布数据/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /自主计算研究/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /自主计算估值/ })).toBeInTheDocument();
   });
 
   it("危险协议链接不渲染为链接；来源文本转义", async () => {

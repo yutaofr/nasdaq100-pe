@@ -27,7 +27,21 @@ subprocess.run(py + ["import-published", "--file", str(tmp / "in.json"), "--evid
 subprocess.run(py + ["build-local"], env=env, check=True, capture_output=True)
 # ---- 研究：合成演示输入（101 只左右规模由性能测试脚本另行生成；此处小样本） ----
 import datetime as _dt
+from decimal import Decimal
 H = "c" * 64
+
+def synthetic_ttm_evidence(eps):
+    # Test-only reported quarters; each synthetic EPS is independently recomputable.
+    end = _dt.date(2026, 9, 30)
+    quarters = []
+    for n in reversed(range(4)):
+        qend = end - _dt.timedelta(days=91 * n)
+        quarters.append({"start": (qend - _dt.timedelta(days=90)).isoformat(), "end": qend.isoformat(),
+                         "val": str(Decimal(eps) / 4), "filed": (qend + _dt.timedelta(days=30)).isoformat(),
+                         "accn": f"synthetic-{n}", "form": "10-Q", "manual": False})
+    return {"quarters": quarters, "calculation_path": "reported_quarter_eps_sum", "source_id": "s1",
+            "evidence": {"cik": "synthetic", "content_sha256": H,
+                         "locator": "us-gaap/EarningsPerShareDiluted/USD/shares", "quarters": quarters}}
 N = int(os.environ.get("E2E_N", "12"))
 ids = [f"s{i:03d}" for i in range(N)]
 w = [f"{1/N:.10f}" for _ in ids]
@@ -42,7 +56,8 @@ rows = {"schema_version": "1", "method_version": "1", "data_mode": "synthetic",
         "prices": [{"security_id": i, "date": "2026-11-06", "close": "100", "currency": "USD", "price_type": "regular_close",
                     "split_basis_date": "2026-01-01", "source_id": "s1", "fetched_at": "2026-11-08T10:00:00+00:00"} for i in ids],
         "earnings": [{"security_id": i, "kind": "ttm", "eps": str(2 + n % 7 - (8 if n == 3 else 0)), "accounting_basis": "gaap", "currency": "USD",
-                      "split_basis_date": "2026-01-01", "latest_quarter_end": "2026-09-30", "fetched_at": "2026-11-08T10:00:00+00:00"}
+                      "split_basis_date": "2026-01-01", "latest_quarter_end": "2026-09-30", "fetched_at": "2026-11-08T10:00:00+00:00",
+                      **synthetic_ttm_evidence(str(2 + n % 7 - (8 if n == 3 else 0)))}
                      for n, i in enumerate(ids) if n % 5 != 4]}
 (tmp / "research.json").write_text(json.dumps(rows))
 r = subprocess.run(py + ["import", "--file", str(tmp / "research.json"), "--basket-date", "2026-11-06", "--price-date", "2026-11-06",

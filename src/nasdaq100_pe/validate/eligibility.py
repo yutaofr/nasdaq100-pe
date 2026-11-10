@@ -3,13 +3,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
 from nasdaq100_pe.calendar import CalendarUnknown, TradingCalendar, strict_cutoff
-from nasdaq100_pe.dec import D, dstr
+from nasdaq100_pe.dec import D, dstr, mul
+from nasdaq100_pe.normalize.net_income import PATH as NET_INCOME_PATH
 from nasdaq100_pe.engine.core import EarningsInput, SecurityInputs, ValidatedInputs
 from nasdaq100_pe.method import MethodSpec
+from nasdaq100_pe.validate.earnings import validate_fy1_rows, validate_net_income_row, validate_ttm_input_row
 from nasdaq100_pe.validate.input import InputValidation
 
 
@@ -109,6 +112,7 @@ def assess_eligibility(inputs: InputValidation, context: AnalysisContext, calend
         return True
 
     prices: dict[str, dict] = {}
+    duplicate_prices: set[str] = set()
     for p in inputs.prices:
         sid = p["security_id"]
         if p.get("date") != c.D.isoformat():
@@ -123,13 +127,18 @@ def assess_eligibility(inputs: InputValidation, context: AnalysisContext, calend
             diags.append({"code": "FEED_NOT_CONSOLIDATED", "security_id": sid}); continue
         if c.data_mode == "real" and not (p.get("split_basis_date") and p.get("evidence_sha256") and p.get("locator")):
             diags.append({"code": "PRICE_NO_EVIDENCE", "security_id": sid}); continue
-        if sid in prices:
-            diags.append({"code": "PRICE_DUPLICATE", "security_id": sid}); prices.pop(sid); continue
+        if sid in prices or sid in duplicate_prices:
+            diags.append({"code": "PRICE_DUPLICATE", "security_id": sid}); prices.pop(sid, None); duplicate_prices.add(sid); continue
         if fresh(p, sid, "price"):
             prices[sid] = p
 
     earn: dict[tuple, EarningsInput] = {}
+    duplicate_earnings: set[tuple] = set()
     bases: dict[str, set] = {"ttm": set(), "fy1": set()}
+    identities_by_id = {s.security_id: s for s in inputs.universe.securities}
+    identities_by_issuer: dict[str, list] = {}
+    for s in inputs.universe.securities:
+        identities_by_issuer.setdefault(s.issuer_id, []).append(s)
     for e in inputs.earnings:
         sid, kind = e["security_id"], e["kind"]
         p = prices.get(sid)
@@ -138,7 +147,19 @@ def assess_eligibility(inputs: InputValidation, context: AnalysisContext, calend
             continue
         if not fresh(e, sid, kind):
             continue
-        if e.get("accounting_basis") not in ("gaap", "normalized"):
+        ni_path = kind == "ttm" and e.get("calculation_path") == NET_INCOME_PATH
+        source = inputs.sources.get(e.get("source_id"))
+        evidence = e.get("evidence") or {}
+        source_hash = source.get("content_sha256") if source else None
+        if c.data_mode == "real" and (not source or not isinstance(evidence, dict) or
+                not isinstance(source_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", source_hash) or
+                evidence.get("content_sha256") != source_hash or not evidence.get("locator") or
+                (kind == "ttm" and (not evidence.get("cik") or
+                                    (not evidence.get("components") if ni_path else evidence.get("quarters") != e.get("quarters"))))):
+            bad = "EARNINGS_NO_EVIDENCE"
+        elif ni_path and c.method_version == "1":
+            bad = "PATH_NOT_IN_METHOD"          # 净利润路径自方法版本 2 起才允许
+        elif e.get("accounting_basis") not in ("gaap", "normalized"):
             bad = "UNKNOWN_ACCOUNTING_BASIS"
         elif e["currency"] != p["currency"]:
             bad = "CURRENCY_MISMATCH"
@@ -148,21 +169,50 @@ def assess_eligibility(inputs: InputValidation, context: AnalysisContext, calend
             q = e.get("latest_quarter_end")
             if not q:
                 bad = "MISSING_FIELD"
-            elif (c.D - date.fromisoformat(q)).days > pol.ttm_max_age_days:
-                bad = "STALE_EARNINGS"
+            else:
+                try:
+                    quarter_end = date.fromisoformat(q)
+                except (ValueError, TypeError):
+                    bad = "BAD_EARNINGS_DATE"
+                else:
+                    if quarter_end > c.D:
+                        bad = "SOURCE_AFTER_PRICE_DATE"
+                    elif (c.D - quarter_end).days > pol.ttm_max_age_days:
+                        bad = "STALE_EARNINGS"
+                    else:
+                        bad = (validate_net_income_row if ni_path else validate_ttm_input_row)(e, identities_by_id[sid], identities_by_issuer[identities_by_id[sid].issuer_id],
+                                                     p.get("split_basis_date"), c.D, c.T)
         else:
-            if e.get("forecast_period") != "FY1":
+            _, fy_bad = validate_fy1_rows([e])
+            if fy_bad:
+                bad = fy_bad[0]["reason"]
+            elif date.fromisoformat(e["fiscal_year_end"]) <= c.D:
                 bad = "WRONG_FORECAST_PERIOD"
+            elif c.data_mode == "real" and not e.get("forecast_period_evidence"):
+                bad = "FY1_EVIDENCE_INSUFFICIENT"
             elif e.get("source_updated_at"):
-                if (c.D - date.fromisoformat(e["source_updated_at"])).days > pol.fy1_revision_max_age_days:
-                    bad = "STALE_FORECAST"
+                try:
+                    updated = date.fromisoformat(e["source_updated_at"])
+                except (ValueError, TypeError):
+                    bad = "BAD_EARNINGS_DATE"
+                else:
+                    if updated > c.T.date():
+                        bad = "SOURCE_AFTER_CUTOFF"
+                    elif (c.D - updated).days > pol.fy1_revision_max_age_days:
+                        bad = "STALE_FORECAST"
             else:
                 diags.append({"code": "FORECAST_FRESHNESS_UNVERIFIED", "security_id": sid, "kind": kind})
         if bad:
             diags.append({"code": bad, "security_id": sid, "kind": kind}); continue
-        if (sid, kind) in earn:
-            diags.append({"code": "EARNINGS_DUPLICATE", "security_id": sid, "kind": kind}); earn.pop((sid, kind)); continue
-        earn[(sid, kind)] = EarningsInput(eps=D(e["eps"]), price=D(p["close"]))
+        if (sid, kind) in earn or (sid, kind) in duplicate_earnings:
+            diags.append({"code": "EARNINGS_DUPLICATE", "security_id": sid, "kind": kind}); earn.pop((sid, kind), None); duplicate_earnings.add((sid, kind)); continue
+        if ni_path:
+            # 净利润 ÷（稀释股数 × 该证券价格）。分量已由 validate_net_income_row 复算核对。
+            earn[(sid, kind)] = EarningsInput(profit=D(e["profit"]), market_cap=mul(D(e["shares"]), D(p["close"])),
+                                              profit_path_verified=True)
+            diags.append({"code": "TTM_NET_INCOME_PATH", "security_id": sid, "kind": kind})
+        else:
+            earn[(sid, kind)] = EarningsInput(eps=D(e["eps"]), price=D(p["close"]))
         bases[kind].add(e["accounting_basis"])
 
     if c.freshness_policy == "weekly" and used_fetch and max(used_fetch) - min(used_fetch) > timedelta(days=pol.weekly_max_span_days):

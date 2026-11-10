@@ -6,7 +6,7 @@ from nasdaq100_pe.calendar import CalendarUnknown, TradingCalendar, strict_cutof
 from nasdaq100_pe.method import MethodSpec
 from nasdaq100_pe.validate.eligibility import AnalysisContext, EligibilityError, assess_eligibility, input_identity, series_key
 from nasdaq100_pe.validate.input import validate_research_input
-from tests.research_fixtures import base_input, dump
+from tests.research_fixtures import base_input, dump, ttm_evidence
 
 CAL = TradingCalendar.load()
 M = MethodSpec.load()
@@ -28,9 +28,10 @@ def build(fetched=None, ttm_q=date(2026, 9, 30), fy_upd=date(2026, 10, 20), pric
                     "split_basis_date": "2026-01-01", "source_id": "s1", "fetched_at": fetched} for s in "abc"]
     d["earnings"] = [
         {"security_id": "a", "kind": "ttm", "eps": "5", "accounting_basis": "gaap", "currency": "USD", "split_basis_date": "2026-01-01",
-         "latest_quarter_end": ttm_q.isoformat(), "fetched_at": fetched},
+         "latest_quarter_end": ttm_q.isoformat(), "fetched_at": fetched, **ttm_evidence("5", ttm_q.isoformat())},
         {"security_id": "a", "kind": "fy1", "eps": "6", "accounting_basis": "normalized", "currency": "USD", "split_basis_date": "2026-01-01",
-         "forecast_period": "FY1", "source_updated_at": fy_upd.isoformat() if fy_upd else None, "fetched_at": fetched},
+         "forecast_period": "FY1", "fiscal_year_end": "2027-09-30", "statistic": "mean", "unit": "per_share",
+         "normalized_evidence": "synthetic provider note", "source_updated_at": fy_upd.isoformat() if fy_upd else None, "fetched_at": fetched},
     ]
     d.update(over)
     return validate_research_input(dump(d), M)

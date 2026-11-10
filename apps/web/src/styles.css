@@ -34,3 +34,5 @@ table { border-collapse:collapse; width:100%; } th, td { text-align:left; border
 .tablewrap.tall { max-height:480px; overflow:auto; } thead th { position:sticky; top:0; background:var(--card); }
 td.sticky { position:sticky; left:0; background:var(--card); } .bar { display:inline-block; height:8px; background:var(--blue); vertical-align:middle; max-width:120px; }
 th button { font-weight:600; background:none; border:0; cursor:pointer; color:var(--blue); } .hgroup svg { width:100%; max-width:480px; height:60px; color:var(--blue); }
+
+.osub { margin: 4px 0 0; font-size: 12px; line-height: 1.4; opacity: .75; }

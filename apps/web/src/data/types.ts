@@ -65,6 +65,7 @@ export interface MetricResult {
 export interface SubsetResult {
   name: string; available: boolean; reason: string; covered_weight: string | null; covered_count: number;
   excluded_ids: string[]; subset_yield: string | null; pe: string | null; pe_state: string; note: string;
+  coverage_ratio?: string | null; min_coverage?: string | null; display_qualified?: boolean;
 }
 export interface Snapshot {
   snapshot_id: string; series_key: string; data_mode: "real" | "synthetic"; revision_seq: number;

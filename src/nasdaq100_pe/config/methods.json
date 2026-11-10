@@ -1,5 +1,5 @@
 {
-  "method_version": "1",
+  "method_version": "2",
   "precision": 34,
   "calc_tolerance": "1e-10",
   "weight_sum_tolerance": "0.0001",
@@ -10,5 +10,6 @@
   "ttm_max_age_days": 180,
   "fy1_revision_max_age_days": 30,
   "strict_cutoff_hour_ny": 12,
+  "subset_display_min_coverage": "0.9",
   "sector_taxonomy": "provider-sector-v1"
 }

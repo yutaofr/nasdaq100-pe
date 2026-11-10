@@ -22,9 +22,12 @@ class SubsetResult:
     pe_state: str = "incomplete"
     note: str = NOTE
     is_full_index: bool = False
+    coverage_ratio: Decimal | None = None
+    min_coverage: Decimal | None = None      # 方法版本≥2 的展示门槛；None 表示该方法版本没有此规则
+    display_qualified: bool = False          # 覆盖达到门槛且 PE 有数值，首页才可展示“已覆盖部分 PE”
 
 
-def calculate_subset(result, metric: str) -> SubsetResult:
+def calculate_subset(result, metric: str, min_coverage: Decimal | None = None) -> SubsetResult:
     m = result.metrics[metric]
     name = f"已覆盖证券子集{'TTM' if metric == 'ttm' else 'FY1'}估值"
     if not result.basket_complete:      # 完整权重未知一律禁止子集覆盖
@@ -34,5 +37,6 @@ def calculate_subset(result, metric: str) -> SubsetResult:
         return SubsetResult(name, False, "NO_COVERED_WEIGHT", covered_weight=C)
     y = div(K, C)
     pe, state = (div(C, K), "value") if K > 0 else (None, "non_positive")
+    qualified = min_coverage is not None and m.coverage_ratio is not None and m.coverage_ratio >= min_coverage and state == "value"
     return SubsetResult(name, True, "", C, sum(1 for s in m.securities.values() if s.valid), list(m.missing_security_ids),
-                        K, y, pe, state)
+                        K, y, pe, state, coverage_ratio=m.coverage_ratio, min_coverage=min_coverage, display_qualified=qualified)
