@@ -5,8 +5,9 @@ research input → import → local research release.
     python scripts/refresh_real.py --base-input ~/ndx-pe-data/inputs/research-D/research-input.json   # 补跑
 
 It only chains the existing steps; every gate stays where it was. The holdings file is the JSON the
-Invesco "All QQQ holdings" page loads, saved by hand. Its effectiveDate becomes both W and D, so run
-this within five trading days of that date (the Nasdaq NOCP endpoint returns no older closes).
+Invesco "All QQQ holdings" page loads, saved by hand. Its effectiveDate becomes both W and D (a weekend or
+holiday date maps to the last trading day before it, see normalize.holdings.basket_date), so run this
+within five trading days of that date (the Nasdaq NOCP endpoint returns no older closes).
 A step that fails stops the run; already archived evidence is reused on the next run.
 """
 from __future__ import annotations
@@ -47,8 +48,19 @@ def main() -> None:
     p.add_argument("--no-publish", action="store_true", help="只导入生成快照，不构建发布")
     a = p.parse_args()
 
-    target = (json.loads(a.holdings.read_bytes())["effectiveDate"] if a.holdings
-              else json.loads(a.base_input.read_bytes())["weights"]["date"])
+    sys.path.insert(0, str(HERE.parent / "src"))
+    from nasdaq100_pe.calendar import TradingCalendar
+    from nasdaq100_pe.normalize.holdings import basket_date
+    cal = TradingCalendar.load()
+    if a.holdings:
+        h = json.loads(a.holdings.read_bytes())
+        target, basis = basket_date(h, cal)
+        if basis != "effectiveDate":
+            print(f"持仓 effectiveDate {h['effectiveDate']} 不是交易日；篮子日/价格日取 {target}（依据：{basis}）", flush=True)
+    else:
+        target = json.loads(a.base_input.read_bytes())["weights"]["date"]
+    if not cal.is_trading_day(datetime.fromisoformat(target).date()):
+        raise SystemExit(f"价格日 {target} 不是交易日，未发起任何请求")
     store = Path(os.environ.get("NDX_PE_DATA_ROOT") or a.data_dir / "store")
     evidence = a.data_dir / "inputs" / "evidence"
     out = a.data_dir / "inputs" / f"research-{target}"
@@ -64,6 +76,10 @@ def main() -> None:
             "--evidence", str(evidence), "--output", str(out), "--store", str(store), "--target-date", target, "--earnings"], env)
     nocp = run("采集 Nasdaq 官方收盘价", py + [str(HERE / "collect_nocp.py"), "--input", str(base), "--evidence", str(evidence),
                "--target-date", target, "--index", str(out / "nocp-index.json")], env)
+    if not nocp.get("with_close"):
+        raise SystemExit(f"没有取到任何官方收盘价，已停止（未导入、未发布）。接口答复：{nocp.get('problems')}\n"
+                         "HTTP 403/429 表示 Nasdaq 拒绝了本机的请求：脚本不重试、不绕过。换个时间或网络后原命令重跑即可，"
+                         "已归档的部分不会重复请求；注意该接口只回最近 5 个交易日。")
     fy1 = run("采集 FY1 一致预期", py + [str(HERE / "collect_fy1.py"), "--input", str(base), "--evidence", str(evidence),
               "--index", str(out / "fy1-index.json")], env)
     observed = datetime.now(timezone.utc).isoformat()

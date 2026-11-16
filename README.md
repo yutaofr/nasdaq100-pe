@@ -55,7 +55,7 @@ ndx-pe check-prices --input research.json --prices prices.csv --basket-date … 
 ```bash
 python scripts/refresh_real.py --holdings ~/Downloads/qqq-holdings.json --exclude 'HON=2026-06-29 分拆并反向拆股，TTM 净利润含已分拆业务'
 ```
-它依次执行：归档持仓并刷新 SEC companyfacts → 采集 Nasdaq 官方收盘价 → 采集 FY1 一致预期 → 生成输入 → `validate` → `import` → `build-local`，最后打印两种口径的覆盖率、PE 和逐证券缺口。持仓文件的 `effectiveDate` 同时作为 W 和 D；官方收盘价接口只回最近 5 个交易日，所以要在该日期后一周内运行。中途失败可用 `--base-input <该日目录>/research-input.json` 补跑，已归档的响应不会重复请求。下面 2a 是它串起来的各个步骤。
+它依次执行：归档持仓并刷新 SEC companyfacts → 采集 Nasdaq 官方收盘价 → 采集 FY1 一致预期 → 生成输入 → `validate` → `import` → `build-local`，最后打印两种口径的覆盖率、PE 和逐证券缺口。持仓文件的 `effectiveDate` 同时作为 W 和 D（落在周末或休市日时取此前最后一个交易日，依据写入来源记录的 `basket_date_basis`）；Nasdaq 接口返回 403/429 时脚本立即停止、不重试，换个时间或网络后原命令重跑；官方收盘价接口只回最近 5 个交易日，所以要在该日期后一周内运行。中途失败可用 `--base-input <该日目录>/research-input.json` 补跑，已归档的响应不会重复请求。下面 2a 是它串起来的各个步骤。
 
 **FY1 的来源与规则**（`docs/ADD.md` §5.3“FY1 来源”）：数值取自 Nasdaq 个股 Earnings 页调用的 `earnings-forecast` 接口；FY1 指含 D 的财年之后的下一财年，由 SEC 已申报的财年末判定取哪一行，不按行序猜。发行人最近一期不是只以 USD 报告的（ASML、CCEP、FER、PDD 等）不生成 FY1 行。来源没有修订日期，逐行带 `FORECAST_FRESHNESS_UNVERIFIED`。
 

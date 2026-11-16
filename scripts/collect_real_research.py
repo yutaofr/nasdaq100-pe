@@ -22,6 +22,8 @@ from pathlib import Path
 
 from nasdaq100_pe.adapters.sec import SecClient, fetch_earnings
 from nasdaq100_pe.archive.store import ArchiveStore
+from nasdaq100_pe.calendar import TradingCalendar
+from nasdaq100_pe.normalize.holdings import basket_date
 from nasdaq100_pe.validate.earnings import validate_earnings
 from nasdaq100_pe.identity.models import SecurityIdentity
 
@@ -100,14 +102,15 @@ def collect(holdings_file: Path, evidence: Path, output: Path, store: ArchiveSto
     raw = holdings_file.read_bytes()
     holdings_hash = archive(evidence / f"invesco-qqq-holdings-{digest(raw)}.json", raw)
     obj = json.loads(raw)
-    w = obj["effectiveDate"]
+    w, w_basis = basket_date(obj, TradingCalendar.load())
     if w != target_date or obj.get("totalNumberOfHoldings") != len(obj["holdings"]):
-        raise ValueError("Target date or holdings row count differs from source")
+        raise ValueError(f"Target date {target_date} differs from basket date {w} ({w_basis}), or holdings row count differs from source")
     client = SecClient(user_agent=sec_user_agent(), min_interval=0.25)
     ciks, ticker_source = sec_ticker_map(client, evidence)
     fetched = datetime.fromtimestamp(holdings_file.stat().st_mtime, timezone.utc).isoformat()
     sources = [{"source_id": "invesco-qqq", "content_sha256": holdings_hash,
-                "fetched_at": fetched, "locator": HOLDINGS_URL}, ticker_source]
+                "fetched_at": fetched, "locator": HOLDINGS_URL,
+                "holdings_effective_date": obj["effectiveDate"], "basket_date_basis": w_basis}, ticker_source]
     securities, weights, excluded, matrix = [], [], [], []
     sec_batches = {}
     for h in obj["holdings"]:
@@ -180,7 +183,8 @@ def collect(holdings_file: Path, evidence: Path, output: Path, store: ArchiveSto
         fields = list(dict.fromkeys(k for row in matrix for k in row))
         writer = csv.DictWriter(f, fields)
         writer.writeheader(); writer.writerows(matrix)
-    summary = {"holdings_effective_date": w, "target_price_date": target_date,
+    summary = {"holdings_effective_date": obj["effectiveDate"], "basket_date": w, "basket_date_basis": w_basis,
+               "target_price_date": target_date,
                "holdings_sha256": holdings_hash, "holdings_count": len(obj["holdings"]),
                "equity_count": len(securities), "excluded_count": len(excluded),
                "equity_weight_raw": str(sum(Decimal(x["weight"]) for x in weights)),

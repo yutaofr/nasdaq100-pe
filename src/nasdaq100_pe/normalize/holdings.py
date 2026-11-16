@@ -33,3 +33,32 @@ def normalize_holdings(raw: bytes, evidence: SourceEvidence) -> tuple[Universe, 
                    known_excluded_weight=known if excluded else None,
                    unknown_excluded_items=[e["label"] for e in excluded if e["weight"] is None])
     return uni, ws
+
+
+class BasketDateError(ValueError):
+    pass
+
+
+def basket_date(holdings: dict, calendar) -> tuple[str, str]:
+    """持仓文件对应的篮子日 W 及依据。
+
+    effectiveDate 是交易日时直接采用。落在周末/休市日时（来源在非交易日也会给出当日日期），
+    其后没有新的收盘价，权重对应的是此前最后一个交易日的收盘：文件自带的 effectiveBusinessDate
+    与之一致时以它为依据；文件没有可用的营业日字段时采用此前最后一个交易日并注明是推定。
+    营业日字段指向别的交易日则拒绝，不猜。
+    """
+    from datetime import date, timedelta
+    eff = date.fromisoformat(holdings["effectiveDate"])
+    if calendar.is_trading_day(eff):
+        return eff.isoformat(), "effectiveDate"
+    prev = eff - timedelta(days=1)
+    while not calendar.is_trading_day(prev):
+        prev -= timedelta(days=1)
+    biz = holdings.get("effectiveBusinessDate")
+    if biz:
+        b = date.fromisoformat(biz)
+        if b == prev:
+            return prev.isoformat(), "effectiveBusinessDate"
+        if calendar.is_trading_day(b):
+            raise BasketDateError(f"effectiveDate {eff} 非交易日，而 effectiveBusinessDate {b} 不是其前一交易日 {prev}")
+    return prev.isoformat(), "previous_trading_day_inferred"

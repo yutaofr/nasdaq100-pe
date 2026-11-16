@@ -109,3 +109,17 @@ def test_usd_convenience_translation_next_to_home_currency_is_not_usd_reporting(
     cf["facts"]["us-gaap"]["NetIncomeLoss"]["units"]["CNY"][0]["end"] = "2023-12-31"    # 早年本币、最近一期只有 USD
     cf["facts"]["us-gaap"]["NetIncomeLoss"]["units"]["CNY"][0]["start"] = "2023-01-01"
     assert select_fy1(forecast(*ROWS), SUR, cf, AS_OF, CUTOFF).status == "ok"
+
+
+def test_basket_date_maps_a_non_trading_effective_date_to_the_prior_trading_day():
+    import pytest
+    from nasdaq100_pe.calendar import TradingCalendar
+    from nasdaq100_pe.normalize.holdings import BasketDateError, basket_date
+    cal = TradingCalendar.load()
+    assert basket_date({"effectiveDate": "2026-11-13"}, cal) == ("2026-11-13", "effectiveDate")
+    assert basket_date({"effectiveDate": "2026-11-15", "effectiveBusinessDate": "2026-11-13"}, cal) == ("2026-11-13", "effectiveBusinessDate")
+    assert basket_date({"effectiveDate": "2026-11-15", "effectiveBusinessDate": "2026-11-15"}, cal) == ("2026-11-13", "previous_trading_day_inferred")
+    assert basket_date({"effectiveDate": "2026-11-27"}, cal)[0] == "2026-11-27"                    # 半日市仍是交易日
+    assert basket_date({"effectiveDate": "2026-11-26"}, cal) == ("2026-11-25", "previous_trading_day_inferred")   # 感恩节
+    with pytest.raises(BasketDateError):
+        basket_date({"effectiveDate": "2026-11-15", "effectiveBusinessDate": "2026-11-12"}, cal)
