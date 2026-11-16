@@ -50,11 +50,22 @@ ndx-pe check-prices --input research.json --prices prices.csv --basket-date … 
 ```
 研究输入格式见 `tests/research_fixtures.py`（最小可用样例）与 `docs/ADD.md` §4。默认模式 `research/current/subset/weekly`；`--profile strict` 只允许 `current/full/daily`。
 
+### 2·0 一条命令更新真实数据（TTM + FY1）
+在浏览器打开 Invesco “All QQQ holdings” 页面，把它加载的持仓 JSON 另存为文件，然后：
+```bash
+python scripts/refresh_real.py --holdings ~/Downloads/qqq-holdings.json --exclude 'HON=2026-06-29 分拆并反向拆股，TTM 净利润含已分拆业务'
+```
+它依次执行：归档持仓并刷新 SEC companyfacts → 采集 Nasdaq 官方收盘价 → 采集 FY1 一致预期 → 生成输入 → `validate` → `import` → `build-local`，最后打印两种口径的覆盖率、PE 和逐证券缺口。持仓文件的 `effectiveDate` 同时作为 W 和 D；官方收盘价接口只回最近 5 个交易日，所以要在该日期后一周内运行。中途失败可用 `--base-input <该日目录>/research-input.json` 补跑，已归档的响应不会重复请求。下面 2a 是它串起来的各个步骤。
+
+**FY1 的来源与规则**（`docs/ADD.md` §5.3“FY1 来源”）：数值取自 Nasdaq 个股 Earnings 页调用的 `earnings-forecast` 接口；FY1 指含 D 的财年之后的下一财年，由 SEC 已申报的财年末判定取哪一行，不按行序猜。发行人最近一期不是只以 USD 报告的（ASML、CCEP、FER、PDD 等）不生成 FY1 行。来源没有修订日期，逐行带 `FORECAST_FRESHNESS_UNVERIFIED`。
+
 ### 2a. 用已归档证据批量生成真实输入（方法版本 2）
 ```bash
 python scripts/collect_nocp.py --input BASKET.json --evidence EVIDENCE_DIR --target-date D --index OUT/nocp-index.json   # 联网：每只证券一次 Nasdaq 官方收盘价；接口只回最近 5 个交易日
 python scripts/build_research_v2.py --base-input BASKET.json --nocp-index OUT/nocp-index.json --store $NDX_PE_DATA_ROOT \
     --price-date D --observed-at T --output OUT        # 离线：读 SEC 缓存，写 research-input-v2.json 与逐证券 coverage-report-v2.csv
+python scripts/collect_fy1.py --input BASKET.json --evidence EVIDENCE_DIR --index OUT/fy1-index.json                      # 联网：每只证券两次请求（预测、来源口径已报告 EPS）
+#   之后给 build_research_v2.py 加 --fy1-index OUT/fy1-index.json --evidence EVIDENCE_DIR 即同时生成 FY1 行
 ```
 没通过核对的证券不会生成盈利行，原因写在 `coverage-report-v2.csv`；人工裁定不纳入的用 `--exclude 'TICKER=原因'`。
 
