@@ -45,6 +45,8 @@ def main() -> None:
     p.add_argument("--exclude", action="append", default=[], metavar="TICKER=REASON",
                    help="人工裁定不纳入 TTM 净利润路径的证券，可重复")
     p.add_argument("--reason", help="同一 D 已有快照时的修订原因")
+    p.add_argument("--nocp-response", action="append", default=[], metavar="TICKER=FILE",
+                   help="保存的 Nasdaq NOCP 原始响应，证券与日期校验后补录；可重复")
     p.add_argument("--no-publish", action="store_true", help="只导入生成快照，不构建发布")
     a = p.parse_args()
 
@@ -75,11 +77,13 @@ def main() -> None:
         run("归档持仓并刷新 SEC companyfacts", py + [str(HERE / "collect_real_research.py"), "--holdings", str(a.holdings),
             "--evidence", str(evidence), "--output", str(out), "--store", str(store), "--target-date", target, "--earnings"], env)
     nocp = run("采集 Nasdaq 官方收盘价", py + [str(HERE / "collect_nocp.py"), "--input", str(base), "--evidence", str(evidence),
-               "--target-date", target, "--index", str(out / "nocp-index.json")], env)
+               "--target-date", target, "--index", str(out / "nocp-index.json")]
+               + [arg for value in a.nocp_response for arg in ("--response", value)], env)
     if not nocp.get("with_close"):
         raise SystemExit(f"没有取到任何官方收盘价，已停止（未导入、未发布）。接口答复：{nocp.get('problems')}\n"
-                         "HTTP 403/429 表示 Nasdaq 拒绝了本机的请求：脚本不重试、不绕过。换个时间或网络后原命令重跑即可，"
-                         "已归档的部分不会重复请求；注意该接口只回最近 5 个交易日。")
+                         "HTTP 403/429 表示 Nasdaq 拒绝了本机的请求；重跑不保证恢复。"
+                         "可通过 --nocp-response TICKER=FILE 补录保存的 Nasdaq NOCP 原始 JSON。"
+                         "文件必须含该证券、目标日期和 Nasdaq Closing Price；不接受手写价格。")
     fy1 = run("采集 FY1 一致预期", py + [str(HERE / "collect_fy1.py"), "--input", str(base), "--evidence", str(evidence),
               "--index", str(out / "fy1-index.json")], env)
     observed = datetime.now(timezone.utc).isoformat()

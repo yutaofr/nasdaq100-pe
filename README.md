@@ -55,7 +55,7 @@ ndx-pe check-prices --input research.json --prices prices.csv --basket-date … 
 ```bash
 python scripts/refresh_real.py --holdings ~/Downloads/qqq-holdings.json --exclude 'HON=2026-06-29 分拆并反向拆股，TTM 净利润含已分拆业务'
 ```
-它依次执行：归档持仓并刷新 SEC companyfacts → 采集 Nasdaq 官方收盘价 → 采集 FY1 一致预期 → 生成输入 → `validate` → `import` → `build-local`，最后打印两种口径的覆盖率、PE 和逐证券缺口。持仓文件的 `effectiveDate` 同时作为 W 和 D（落在周末或休市日时取此前最后一个交易日，依据写入来源记录的 `basket_date_basis`）；Nasdaq 接口返回 403/429 时脚本立即停止、不重试，换个时间或网络后原命令重跑；官方收盘价接口只回最近 5 个交易日，所以要在该日期后一周内运行。中途失败可用 `--base-input <该日目录>/research-input.json` 补跑，已归档的响应不会重复请求。下面 2a 是它串起来的各个步骤。
+它依次执行：归档持仓并刷新 SEC companyfacts → 采集 Nasdaq 官方收盘价 → 采集 FY1 一致预期 → 生成输入 → `validate` → `import` → `build-local`，最后打印两种口径的覆盖率、PE 和逐证券缺口。持仓文件的 `effectiveDate` 同时作为 W 和 D（落在周末或休市日时取此前最后一个交易日，依据写入来源记录的 `basket_date_basis`）；Nasdaq 接口返回 403/429 时采集停止、不重试；重跑不保证恢复，可用 `--nocp-response TICKER=FILE` 补录保存的 Nasdaq NOCP 原始响应；官方收盘价接口只回最近 5 个交易日，所以要在该日期后一周内运行。中途失败可用 `--base-input <该日目录>/research-input.json` 补跑，已归档的响应不会重复请求。下面 2a 是它串起来的各个步骤。
 
 **FY1 的来源与规则**（`docs/ADD.md` §5.3“FY1 来源”）：数值取自 Nasdaq 个股 Earnings 页调用的 `earnings-forecast` 接口；FY1 指含 D 的财年之后的下一财年，由 SEC 已申报的财年末判定取哪一行，不按行序猜。发行人最近一期不是只以 USD 报告的（ASML、CCEP、FER、PDD 等）不生成 FY1 行。来源没有修订日期，逐行带 `FORECAST_FRESHNESS_UNVERIFIED`。
 
@@ -103,3 +103,14 @@ E2E 用系统已安装的 Chrome（Playwright `channel: "chrome"`），不额外
 
 ## 安全边界
 只绑定 `127.0.0.1`，只读（无上传/配置接口），不开放 CORS，Host 白名单；DATA_ROOT 在服务目录之外；原件、完整异常栈、路径、令牌不进入发布包；导入不会访问任何导入字段里的 URL。**公网发布不在首版范围（E05）**。
+
+### 收盘价请求被拒绝时补录
+
+仅接受 Nasdaq Historical NOCP 原始 JSON，校验目标交易日、`Nasdaq Closing Price` 表头及图表中的证券代码，归档原始文件及 SHA-256。不会把搜索摘要、旧价格、复权价或手写数字当成官方收盘价。补录文件的时间记录为本次归档时间；`acquisition=saved_response_import` 区分于在线采集，原错误保留在 `previous_failure`。
+
+```bash
+python scripts/refresh_real.py --base-input ~/ndx-pe-data/inputs/research-2026-11-13/research-input.json \
+  --nocp-response DASH=/absolute/path/DASH-nocp.json --reason '补录 DASH 原始官方收盘价响应'
+```
+
+该参数也可直接传给 `collect_nocp.py`，名称为 `--response DASH=FILE`。所有补录先校验再处理，遇到证券不符或日期缺失时索引不变；补录优先于网络请求，因此其他证券的 403 不会阻断已提供文件的归档。没有合格文件时仍保留缺口，不保证 Nasdaq 会恢复服务。
