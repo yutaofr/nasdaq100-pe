@@ -265,7 +265,7 @@ TTM 最新季度结束距D≤180自然日，并须为来源当时最新四个连
 
 1. **期间。** FY1 = 含 D 的财年之后的下一财年。最近已结束财年末 L 取自 SEC 已申报年报（10-K/20-F/40-F）的年度期间；尚无年报的新上市发行人用最新季报累计期起点的前一天。含 D 的财年末为第一个不早于 D 的 L+k 年，FY1 财年末再加一年；在来源表中找财年末月份相符的唯一一行（允许 ±10 天漂移）。D 距推算财年末 ≤7 天时不判定。来源只给月份，`fiscal_year_end` 记为该月最后一天，原始标签与推算过程存入 `forecast_period_evidence`。不按行序取“第二行”。
 2. **统计量。** 取“Consensus EPS* Forecast”，估计数须 ≥1；少于 3 个带 `FEW_ESTIMATES`。
-3. **币种。** 接口不给币种。只有发行人最近一期利润在 SEC 事实中仅以 USD 报告时才认定为 USD；否则 `FORECAST_CURRENCY_UNVERIFIED`，不生成行（同期并列本币与 USD 便利折算的不算）。
+3. **币种。** 接口不给币种。发行人最近一期利润在 SEC 事实中仅以 USD 报告时沿用原有 USD 判定（同期并列本币与 USD 便利折算的不算）。2026-11-17 增加逐证券、逐响应的人工交叉核对路径：另一公开页面的当年及下一年美元每上市证券预测须与归档响应一致，保存来源、观察记录、股类说明、审核时间及证据哈希。构建时验证证券代码、预测内容哈希、证据文件哈希、FY1 期间及 EPS；新响应必须重新核对。该路径标记 `FORECAST_CURRENCY_CROSSCHECKED`，属于跨来源推断，不是 Nasdaq 的币种声明，不做汇率转换或 ADS 倍率调整。未满足任一路径仍为 `FORECAST_CURRENCY_UNVERIFIED`。会计口径校验独立保留。证据和局限见 `docs/acceptance/2026-11-17-fy1-currency.md`。
 4. **会计口径。** 接口没有口径字段。依据是同一来源、同一星号口径的已报告 EPS 与 SEC GAAP 稀释 EPS 的逐季对照，存入 `normalized_evidence`：2026-11-16 实测 97 只合格证券中 74 只至少一季与 GAAP 不同，18 只样本内与 GAAP 相同（带 `BASIS_EQUALS_GAAP_IN_SAMPLE`），5 只无可比的 GAAP 单季值（带 `BASIS_COMPARISON_UNAVAILABLE`）。据此把该序列记为供应商调整后口径（normalized）。**这是由数据对照得出的判断，不是来源的书面声明**；它也不等于各公司自己公布的 non-GAAP（例如 NVDA 的来源值低于 GAAP）。取不到对照响应时 `FORECAST_BASIS_UNVERIFIED`，不生成行。
 5. **新鲜度。** 来源没有修订日期，逐行带 `FORECAST_FRESHNESS_UNVERIFIED`；获取时间仍受周度 7 天政策约束。
 6. **使用条款。** 与已在使用的 NOCP 接口同属 Nasdaq 公开站点，`docs/data-feasibility.md` §5 对该站点自动采集的条款限制同样适用；仅限本机个人使用，遇 401/403/406/429 即停止，不重试、不绕过。

@@ -1,0 +1,62 @@
+{
+  "ASML": {
+    "ticker": "ASML",
+    "currency": "USD",
+    "unit": "per_listed_share",
+    "forecast_sha256": "dc196edad26f7c9dbb84c2f463e84722d391c160fcedf06744b46e6798fdbe90",
+    "reviewed_at": "2026-11-16T23:54:49.053965+00:00",
+    "method": "two_year_forecast_currency_crosscheck",
+    "fiscal_year_end": "2027-12-31",
+    "eps": "62.48",
+    "current_year_eps": "46.51",
+    "source_url": "https://www.marketbeat.com/stocks/NASDAQ/ASML/earnings/",
+    "evidence_file": "ASML.txt",
+    "evidence_sha256": "7111cfb1f2dec7cd46f20652659daeb427f7211977bf02c37db2145f206eb749",
+    "share_basis_note": "Nasdaq New York Registry Shares; crosscheck is NASDAQ:ASML per listed share, no ADR multiplier applied."
+  },
+  "PDD": {
+    "ticker": "PDD",
+    "currency": "USD",
+    "unit": "per_listed_share",
+    "forecast_sha256": "44c0a525c2827944bec4b3dedd3caa52cfe76b85e8810eacecfa77202494626a",
+    "reviewed_at": "2026-11-16T23:54:49.053965+00:00",
+    "method": "two_year_forecast_currency_crosscheck",
+    "fiscal_year_end": "2027-12-31",
+    "eps": "12.02",
+    "current_year_eps": "10.03",
+    "source_url": "https://www.marketbeat.com/stocks/NASDAQ/PDD/earnings/",
+    "evidence_file": "PDD.txt",
+    "evidence_sha256": "d20ff2b723c18ce7fa76a832e98e7318ab650384192295bc732617e8690ad056",
+    "share_basis_note": "Nasdaq American Depositary Shares; crosscheck is NASDAQ:PDD per listed ADS, no ordinary-share multiplication applied."
+  },
+  "CCEP": {
+    "ticker": "CCEP",
+    "currency": "USD",
+    "unit": "per_listed_share",
+    "forecast_sha256": "82f41892a7f52f7af48db30a7b13e7ed0f30d67d32695bf960cb4dcf065f15a5",
+    "reviewed_at": "2026-11-16T23:54:49.053965+00:00",
+    "method": "two_year_forecast_currency_crosscheck",
+    "fiscal_year_end": "2027-12-31",
+    "eps": "5.45",
+    "current_year_eps": "4.96",
+    "source_url": "https://www.marketbeat.com/stocks/NASDAQ/CCEP/",
+    "evidence_file": "CCEP.txt",
+    "evidence_sha256": "b44b8ade58497a704d81a1bd97640e4a5ac1da17584d6e34691e55984e9b22ef",
+    "share_basis_note": "Nasdaq ordinary shares; crosscheck is NASDAQ:CCEP per listed ordinary share."
+  },
+  "FER": {
+    "ticker": "FER",
+    "currency": "USD",
+    "unit": "per_listed_share",
+    "forecast_sha256": "002579d4286c89c141f55e102643d8ed00a912ca9efb17c3343e2db2cee1374a",
+    "reviewed_at": "2026-11-16T23:54:49.053965+00:00",
+    "method": "two_year_forecast_currency_crosscheck",
+    "fiscal_year_end": "2027-12-31",
+    "eps": "1.10",
+    "current_year_eps": "1.01",
+    "source_url": "https://www.marketbeat.com/stocks/NASDAQ/FER/earnings/",
+    "evidence_file": "FER.txt",
+    "evidence_sha256": "676427e636d55e91f2c4ac1eea5aa5007ef05e8237d8f30d1255d404fcdbb012",
+    "share_basis_note": "Nasdaq ordinary shares; crosscheck is NASDAQ:FER per listed ordinary share."
+  }
+}

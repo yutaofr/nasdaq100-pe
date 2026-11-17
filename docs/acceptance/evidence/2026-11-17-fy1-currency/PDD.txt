@@ -1,0 +1,10 @@
+Currency crosscheck observation — PDD
+Observed at: 2026-11-16T23:54:49.053965+00:00
+Source: https://www.marketbeat.com/stocks/NASDAQ/PDD/earnings/
+Acquisition: browser search tool rendered text; manually transcribed facts, NOT raw HTML.
+MarketBeat NASDAQ:PDD forecast: current year $10.03; next year $12.02 per share.
+Nasdaq archived forecast: Dec 2026 10.03; Dec 2027 12.02.
+Interpretation: exact two-year numeric match corroborates USD per listed security.
+This is an inference from another publisher, not Nasdaq currency metadata or independent valuation validation.
+Nasdaq American Depositary Shares; crosscheck is NASDAQ:PDD per listed ADS, no ordinary-share multiplication applied.
+Nasdaq response SHA-256: 44c0a525c2827944bec4b3dedd3caa52cfe76b85e8810eacecfa77202494626a

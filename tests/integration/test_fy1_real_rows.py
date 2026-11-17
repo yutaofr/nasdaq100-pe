@@ -18,7 +18,7 @@ build = importlib.util.module_from_spec(spec); spec.loader.exec_module(build)
 D0 = date(2026, 11, 6)
 T = datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc)
 FETCHED = (T - timedelta(hours=2)).isoformat()
-FORECAST = {"data": {"yearlyForecast": {
+FORECAST = {"data": {"symbol": "A", "yearlyForecast": {
     "headers": {"fiscalEnd": "Fiscal Year End", "consensusEPSForecast": "Consensus EPS* Forecast"},
     "rows": [{"fiscalEnd": "Dec 2026", "consensusEPSForecast": 4.0, "noOfEstimates": 9},
              {"fiscalEnd": "Dec 2027", "consensusEPSForecast": 5.0, "noOfEstimates": 7}]}}}
@@ -74,3 +74,49 @@ def test_unfetched_or_unusable_forecast_produces_no_row(tmp_path):
     assert build.fy1_row("a", "A", {"forecast": {"reason": "HTTP_403"}}, tmp_path, CF, D0.isoformat(), D0, T)[:4] == (None, None, "missing", "HTTP_403")
     thin = json.loads(json.dumps(FORECAST)); thin["data"]["yearlyForecast"]["rows"].pop()
     assert build.fy1_row("a", "A", _entry(tmp_path, thin), tmp_path, CF, D0.isoformat(), D0, T)[2:4] == ("no_forecast", "NEXT_FISCAL_YEAR_NOT_IN_SOURCE")
+
+
+def _currency_review(tmp_path, entry, *, ticker="A", currency="USD"):
+    import hashlib
+    entry["forecast"]["sha256"] = hashlib.sha256((tmp_path / "nasdaq-forecast" / entry["forecast"]["file"]).read_bytes()).hexdigest()
+    d = tmp_path / "fy1-currency"; d.mkdir(exist_ok=True)
+    body = b'Observed public page: current year $4.00; next year $5.00 per listed share.'
+    (d / "excerpt.txt").write_bytes(body)
+    review = {"ticker": ticker, "currency": currency, "unit": "per_listed_share",
+              "forecast_sha256": entry["forecast"]["sha256"], "reviewed_at": FETCHED,
+              "method": "two_year_forecast_currency_crosscheck", "fiscal_year_end": "2027-12-31",
+              "eps": "5", "source_url": "https://example.org/A/earnings",
+              "evidence_file": "excerpt.txt", "evidence_sha256": hashlib.sha256(body).hexdigest(),
+              "share_basis_note": "EPS and price refer to the same listed security"}
+    (d / "index.json").write_text(json.dumps({"A": review}))
+    return d, review
+
+
+def test_non_usd_reporter_with_bound_currency_review_reaches_engine(tmp_path):
+    from copy import deepcopy
+    cf = deepcopy(CF); cf["facts"]["us-gaap"]["NetIncomeLoss"]["units"]["EUR"] = cf["facts"]["us-gaap"]["NetIncomeLoss"]["units"].pop("USD")
+    entry = _entry(tmp_path); _currency_review(tmp_path, entry)
+    row, source, status, *_ = build.fy1_row("a", "A", entry, tmp_path, cf, D0.isoformat(), D0, T)
+    assert status == "ok"
+    assert row["currency"] == "USD" and Decimal(row["eps"]) == Decimal("5")
+    assert "FORECAST_CURRENCY_CROSSCHECKED" in row["quality_flags"]
+    assert calculate(_assess([row], [source]), MethodSpec.load()).metrics["fy1"].securities["a"].pe == Decimal(20)
+
+
+def test_currency_review_rejects_wrong_binding_or_damaged_evidence(tmp_path):
+    from copy import deepcopy
+    cf = deepcopy(CF); cf["facts"]["us-gaap"]["NetIncomeLoss"]["units"]["EUR"] = cf["facts"]["us-gaap"]["NetIncomeLoss"]["units"].pop("USD")
+    entry = _entry(tmp_path); d, review = _currency_review(tmp_path, entry)
+    for field, value in [("ticker", "B"), ("currency", "EUR"), ("forecast_sha256", "f" * 64),
+                         ("eps", "6"), ("fiscal_year_end", "2028-12-31"), ("reviewed_at", "2027-01-01T00:00:00+00:00"),
+                         ("evidence_sha256", "f" * 64), ("unit", "per_ordinary_share"), ("evidence_file", "../outside.txt")]:
+        (d / "index.json").write_text(json.dumps({"A": dict(review, **{field: value})}))
+        assert build.fy1_row("a", "A", entry, tmp_path, cf, D0.isoformat(), D0, T)[2] == "currency_unverified", field
+
+
+def test_verified_currency_does_not_bypass_missing_basis(tmp_path):
+    from copy import deepcopy
+    cf = deepcopy(CF); cf["facts"]["us-gaap"]["NetIncomeLoss"]["units"]["EUR"] = cf["facts"]["us-gaap"]["NetIncomeLoss"]["units"].pop("USD")
+    entry = _entry(tmp_path); _currency_review(tmp_path, entry)
+    (tmp_path / "nasdaq-forecast/A-surprise.json").write_text('{"data": null}')
+    assert build.fy1_row("a", "A", entry, tmp_path, cf, D0.isoformat(), D0, T)[2:4] == ("basis_unverified", "FORECAST_BASIS_UNVERIFIED")

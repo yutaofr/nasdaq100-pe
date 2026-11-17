@@ -1,0 +1,10 @@
+Currency crosscheck observation — ASML
+Observed at: 2026-11-16T23:54:49.053965+00:00
+Source: https://www.marketbeat.com/stocks/NASDAQ/ASML/earnings/
+Acquisition: browser search tool rendered text; manually transcribed facts, NOT raw HTML.
+MarketBeat NASDAQ:ASML forecast: current year $46.51; next year $62.48 per share.
+Nasdaq archived forecast: Dec 2026 46.51; Dec 2027 62.48.
+Interpretation: exact two-year numeric match corroborates USD per listed security.
+This is an inference from another publisher, not Nasdaq currency metadata or independent valuation validation.
+Nasdaq New York Registry Shares; crosscheck is NASDAQ:ASML per listed share, no ADR multiplier applied.
+Nasdaq response SHA-256: dc196edad26f7c9dbb84c2f463e84722d391c160fcedf06744b46e6798fdbe90

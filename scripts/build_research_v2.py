@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 from datetime import date, datetime
 from pathlib import Path
@@ -27,6 +28,41 @@ def _json(path: Path):
     return json.loads(path.read_bytes())
 
 
+def currency_review(evidence: Path, ticker: str, forecast: dict, observed: datetime) -> dict | None:
+    """Load a manually reviewed, response-bound currency crosscheck; fail closed.
+
+    This is corroboration, not a declaration by Nasdaq. A new forecast payload
+    requires a fresh review. Evidence timestamps never replace forecast fetch time.
+    """
+    directory = evidence / "fy1-currency"
+    try:
+        review = _json(directory / "index.json")[ticker]
+        if (review["ticker"] != ticker or review["currency"] != "USD"
+                or review["unit"] != "per_listed_share"
+                or review["method"] != "two_year_forecast_currency_crosscheck"
+                or review["forecast_sha256"] != forecast["sha256"]
+                or not review["source_url"].startswith("https://")
+                or not review["share_basis_note"]):
+            return None
+        reviewed = datetime.fromisoformat(review["reviewed_at"])
+        if (reviewed.tzinfo is None or reviewed > observed
+                or reviewed < datetime.fromisoformat(forecast["fetched_at"])):
+            return None
+        path = (directory / review["evidence_file"]).resolve()
+        if not path.is_relative_to(directory.resolve()):
+            return None
+        if hashlib.sha256(path.read_bytes()).hexdigest() != review["evidence_sha256"]:
+            return None
+        body = (evidence / "nasdaq-forecast" / forecast["file"]).read_bytes()
+        if hashlib.sha256(body).hexdigest() != forecast["sha256"]:
+            return None
+        if str(json.loads(body)["data"]["symbol"]).upper() != ticker.upper():
+            return None
+        return review
+    except (OSError, KeyError, TypeError, ValueError, AttributeError):
+        return None
+
+
 def fy1_row(sid: str, ticker: str, entry: dict, evidence: Path, cf: dict, price_date: str, D: date, T: datetime):
     """返回 (盈利行|None, 来源|None, 状态, 原因, 财年末, 标记)。只读已归档响应。"""
     fc, sp = entry.get("forecast") or {}, entry.get("surprise") or {}
@@ -34,12 +70,15 @@ def fy1_row(sid: str, ticker: str, entry: dict, evidence: Path, cf: dict, price_
         return None, None, "missing", fc.get("reason") or "NOT_FETCHED", "", ""
     d = evidence / "nasdaq-forecast"
     surprise = _json(d / sp["file"]) if sp.get("sha256") else None
-    sel = select_fy1(_json(d / fc["file"]), surprise, cf, D, T.date())
+    sel = select_fy1(_json(d / fc["file"]), surprise, cf, D, T.date(),
+                     currency_evidence=currency_review(evidence, ticker, fc, T))
     if sel.status != "ok":
         return None, None, sel.status, ",".join(sel.reasons), "", ""
     basis = sel.basis_evidence
     compared = basis["quarters_differing_from_gaap"] + basis["quarters_equal_to_gaap"]
     flags = ["FORECAST_FRESHNESS_UNVERIFIED"]
+    if "forecast_currency_evidence" in sel.period_evidence:
+        flags.append("FORECAST_CURRENCY_CROSSCHECKED")
     if sel.estimates < 3:
         flags.append("FEW_ESTIMATES")
     if compared == 0:

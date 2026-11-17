@@ -1,0 +1,10 @@
+Currency crosscheck observation — FER
+Observed at: 2026-11-16T23:54:49.053965+00:00
+Source: https://www.marketbeat.com/stocks/NASDAQ/FER/earnings/
+Acquisition: browser search tool rendered text; manually transcribed facts, NOT raw HTML.
+MarketBeat NASDAQ:FER forecast: current year $1.01; next year $1.10 per share.
+Nasdaq archived forecast: Dec 2026 1.01; Dec 2027 1.10.
+Interpretation: exact two-year numeric match corroborates USD per listed security.
+This is an inference from another publisher, not Nasdaq currency metadata or independent valuation validation.
+Nasdaq ordinary shares; crosscheck is NASDAQ:FER per listed ordinary share.
+Nasdaq response SHA-256: 002579d4286c89c141f55e102643d8ed00a912ca9efb17c3343e2db2cee1374a

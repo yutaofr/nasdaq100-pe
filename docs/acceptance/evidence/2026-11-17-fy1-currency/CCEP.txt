@@ -1,0 +1,10 @@
+Currency crosscheck observation — CCEP
+Observed at: 2026-11-16T23:54:49.053965+00:00
+Source: https://www.marketbeat.com/stocks/NASDAQ/CCEP/
+Acquisition: browser search tool rendered text; manually transcribed facts, NOT raw HTML.
+MarketBeat NASDAQ:CCEP forecast: current year $4.96; next year $5.45 per share.
+Nasdaq archived forecast: Dec 2026 4.96; Dec 2027 5.45.
+Interpretation: exact two-year numeric match corroborates USD per listed security.
+This is an inference from another publisher, not Nasdaq currency metadata or independent valuation validation.
+Nasdaq ordinary shares; crosscheck is NASDAQ:CCEP per listed ordinary share.
+Nasdaq response SHA-256: 82f41892a7f52f7af48db30a7b13e7ed0f30d67d32695bf960cb4dcf065f15a5

@@ -167,7 +167,7 @@ def basis_evidence(surprise: dict | None, cf: dict, filed_cutoff: date) -> dict 
             "quarters": cmp_rows, "quarters_differing_from_gaap": adjusted, "quarters_equal_to_gaap": same}
 
 
-def select_fy1(forecast: dict, surprise: dict | None, cf: dict, as_of: date, filed_cutoff: date) -> Fy1Selection:
+def select_fy1(forecast: dict, surprise: dict | None, cf: dict, as_of: date, filed_cutoff: date, *, currency_evidence: dict | None = None) -> Fy1Selection:
     try:
         yearly = forecast["data"]["yearlyForecast"]
         if any(yearly["headers"].get(k) != v for k, v in FORECAST_HEADERS.items()):
@@ -213,10 +213,19 @@ def select_fy1(forecast: dict, surprise: dict | None, cf: dict, as_of: date, fil
               "current_fiscal_year_end_projected": current_end.isoformat(),
               "next_fiscal_year_end_projected": target.isoformat(),
               "rule": "FY1 = 含 D 的财年之后的下一财年；来源只给财年末月份，fiscal_year_end 取该月最后一天"}
+    try:
+        reviewed_eps = D(currency_evidence.get("eps")) if currency_evidence else None
+    except BadDecimal:
+        reviewed_eps = None
     usd = reports_in_usd(cf)
-    if usd is None:
+    if usd is None and not (currency_evidence and currency_evidence.get("currency") == "USD"
+                            and currency_evidence.get("fiscal_year_end") == month_end.isoformat()
+                            and reviewed_eps == eps):
         return Fy1Selection("currency_unverified", reasons=["FORECAST_CURRENCY_UNVERIFIED"], period_evidence=period)
-    period["reporting_currency_evidence"] = usd
+    if usd is not None:
+        period["reporting_currency_evidence"] = usd
+    else:
+        period["forecast_currency_evidence"] = currency_evidence
     basis = basis_evidence(surprise, cf, filed_cutoff)
     if basis is None:
         return Fy1Selection("basis_unverified", reasons=["FORECAST_BASIS_UNVERIFIED"], period_evidence=period)

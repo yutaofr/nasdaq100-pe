@@ -114,3 +114,7 @@ python scripts/refresh_real.py --base-input ~/ndx-pe-data/inputs/research-2026-1
 ```
 
 该参数也可直接传给 `collect_nocp.py`，名称为 `--response DASH=FILE`。所有补录先校验再处理，遇到证券不符或日期缺失时索引不变；补录优先于网络请求，因此其他证券的 403 不会阻断已提供文件的归档。没有合格文件时仍保留缺口，不保证 Nasdaq 会恢复服务。
+
+### FY1 非美元报表公司的币种补证
+
+`build_research_v2.py` 自动读取 `EVIDENCE_DIR/fy1-currency/index.json`。格式与本次四家公司的审核记录见 `docs/acceptance/evidence/2026-11-17-fy1-currency/`，使用时将该目录的文件复制到上述证据目录。记录绑定原始预测 SHA-256，并附核对来源、观察记录及其哈希；预测响应改变后必须重新审核，不能沿用证券白名单。该补证不刷新预测获取时间、不绕过会计口径校验；本次仅 ASML、PDD 新增合格 FY1，CCEP、FER 仍缺会计口径证据。完整结果见 `docs/acceptance/2026-11-17-fy1-currency.md`。
