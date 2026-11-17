@@ -3,7 +3,8 @@
 One request per ticker to the same endpoint the Nasdaq "Historical NOCP" page calls.
 Responses are stored content-addressed; an index JSON records, per ticker, the hash,
 the fetch time and the parsed "Nasdaq Closing Price" for the target date (or the reason
-none was found). Nothing is retried on an HTTP refusal.
+none was found). When urllib is refused, curl is tried with the same URL and headers (nasdaq_http); a refusal
+from curl stops the run.
 """
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -18,6 +20,9 @@ import urllib.request
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import nasdaq_http  # noqa: E402
 
 NOCP_URL = "https://api.nasdaq.com/api/company/{ticker}/historical-nocp?timeframe=d5"
 
@@ -101,17 +106,13 @@ def main() -> None:
             saved[t] = read_saved_response(Path(filename), t, args.target_date)
         except (ValueError, OSError, TypeError, AttributeError) as e:
             p.error(f"{item}: {e}")
+    fetch = nasdaq_http.Fetcher()
     for t in list(saved) + [t for t in tickers if t not in saved]:
         if index.get(t, {}).get("close") and t not in saved:
             continue
         url = NOCP_URL.format(ticker=urllib.parse.quote(t, safe=""))
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
         try:
-            if t in saved:
-                body = saved[t]
-            else:
-                with urllib.request.urlopen(req, timeout=20) as r:
-                    body = r.read()
+            body = saved[t] if t in saved else fetch(url)
         except urllib.error.HTTPError as e:
             index[t] = {"url": url, "reason": f"HTTP_{e.code}"}
             if e.code in (401, 403, 406, 429):
@@ -133,6 +134,8 @@ def main() -> None:
             if previous and not previous.get("close"):
                 index[t]["previous_failure"] = previous
         else:
+            if fetch.via == "curl":
+                index[t].update(client="curl", urllib_refusal=fetch.urllib_refusal)
             latest = latest_trade_date(body)
             if reason == "DATE_NOT_IN_RESPONSE" and latest and latest < args.target_date:
                 # Nasdaq has not posted the target day's close yet; every other symbol would answer the same.

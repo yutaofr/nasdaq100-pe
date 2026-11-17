@@ -10,6 +10,18 @@ mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
 
+@pytest.fixture(autouse=True)
+def curl_refuses_by_default(monkeypatch):
+    """No test may reach the real curl; by default the fallback is refused like urllib."""
+    import urllib.error
+    calls = []
+    def refused(url):
+        calls.append(url)
+        raise urllib.error.HTTPError(url, 403, 'Forbidden', {}, None)
+    monkeypatch.setattr(mod.nasdaq_http, 'curl_fetch', refused)
+    return calls
+
+
 def response(day='11/13/2026', price='$171.51'):
     return json.dumps({'data': {'headers': {'price': 'Nasdaq Closing Price'},
                               'nocp': {'nocpTable': [{'date': day, 'price': price}], 'nocpChart': [{'z': {'details': 'DASH Close Price: ' + price}}]}}}).encode()
@@ -68,7 +80,7 @@ def test_saved_response_rejects_other_symbol(tmp_path):
         mod.read_saved_response(saved, 'DASH', '2026-11-13')
 
 
-def test_saved_response_is_imported_before_other_symbols_refuse(tmp_path, monkeypatch):
+def test_saved_response_is_imported_before_other_symbols_refuse(tmp_path, monkeypatch, curl_refuses_by_default):
     import urllib.error
     basket = tmp_path / 'input.json'
     basket.write_text(json.dumps({'universe': {'securities': [{'ticker': 'AAPL'}, {'ticker': 'DASH'}, {'ticker': 'MSFT'}]}}))
@@ -88,6 +100,7 @@ def test_saved_response_is_imported_before_other_symbols_refuse(tmp_path, monkey
     assert result['AAPL']['reason'] == 'HTTP_403'
     assert 'MSFT' not in result
     assert len(calls) == 1
+    assert len(curl_refuses_by_default) == 1      # one fallback attempt, then stop
 
 
 class FakeResponse:
@@ -143,3 +156,65 @@ def test_index_directory_is_created_before_any_request(tmp_path, monkeypatch):
     monkeypatch.setattr(mod.time, 'sleep', lambda s: None)
     mod.main()
     assert json.loads(index.read_text())['AAPL']['close'] == '171.51'
+
+
+def test_curl_fallback_takes_over_after_urllib_is_refused(tmp_path, monkeypatch):
+    import urllib.error
+    basket = tmp_path / 'input.json'
+    basket.write_text(json.dumps({'universe': {'securities': [{'ticker': 'AAPL'}, {'ticker': 'MSFT'}]}}))
+    index = tmp_path / 'index.json'
+    monkeypatch.setattr(sys, 'argv', ['collect_nocp', '--input', str(basket), '--evidence', str(tmp_path),
+        '--target-date', '2026-11-13', '--index', str(index)])
+    urllib_calls, curl_calls = [], []
+    def refused(req, **kwargs):
+        urllib_calls.append(req.full_url)
+        raise urllib.error.HTTPError(req.full_url, 403, 'Forbidden', {}, None)
+    def curl(url):
+        curl_calls.append(url)
+        return response()
+    monkeypatch.setattr(mod.urllib.request, 'urlopen', refused)
+    monkeypatch.setattr(mod.nasdaq_http, 'curl_fetch', curl)
+    monkeypatch.setattr(mod.time, 'sleep', lambda s: None)
+    mod.main()
+    result = json.loads(index.read_text())
+    assert result['AAPL']['close'] == result['MSFT']['close'] == '171.51'
+    assert result['AAPL']['client'] == result['MSFT']['client'] == 'curl'
+    assert result['AAPL']['urllib_refusal'] == 'HTTP_403'
+    assert len(urllib_calls) == 1                 # refused once, never asked again
+    assert len(curl_calls) == 2
+
+
+def test_curl_fetch_turns_http_status_into_error(monkeypatch):
+    import subprocess
+    import urllib.error
+    def fake_run(cmd, **kwargs):
+        assert cmd[0] == 'curl' and cmd[-1] == 'https://example.test/x'
+        assert 'User-Agent: Mozilla/5.0' in cmd and 'Accept: application/json' in cmd
+        return subprocess.CompletedProcess(cmd, 0, stdout=b'<HTML>Access Denied</HTML>\n403', stderr=b'')
+    monkeypatch.undo()
+    monkeypatch.setattr(mod.nasdaq_http.subprocess, 'run', fake_run)
+    with pytest.raises(urllib.error.HTTPError) as e:
+        mod.nasdaq_http.curl_fetch('https://example.test/x')
+    assert e.value.code == 403
+
+
+def test_curl_fetch_returns_body_bytes_unchanged(monkeypatch):
+    import subprocess
+    body = response()
+    monkeypatch.undo()
+    monkeypatch.setattr(mod.nasdaq_http.subprocess, 'run',
+                        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout=body + b'\n200', stderr=b''))
+    assert mod.nasdaq_http.curl_fetch('https://example.test/x') == body
+
+
+def test_without_curl_the_original_refusal_stands(monkeypatch):
+    import urllib.error
+    def refused(req, **kwargs):
+        raise urllib.error.HTTPError(req.full_url, 429, 'Too Many', {}, None)
+    def no_curl(url):
+        raise mod.nasdaq_http.CurlUnavailable()
+    monkeypatch.setattr(mod.urllib.request, 'urlopen', refused)
+    monkeypatch.setattr(mod.nasdaq_http, 'curl_fetch', no_curl)
+    with pytest.raises(urllib.error.HTTPError) as e:
+        mod.nasdaq_http.Fetcher()('https://example.test/x')
+    assert e.value.code == 429

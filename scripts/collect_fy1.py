@@ -2,13 +2,15 @@
 
 Two requests per ticker to the endpoints the Nasdaq "Earnings" page calls. Responses are stored
 content-addressed; the index records hash and fetch time only. Selection of the FY1 row and the
-accounting-basis comparison happen offline in build_research_v2.py. Nothing is retried on an HTTP refusal.
+accounting-basis comparison happen offline in build_research_v2.py. When urllib is refused, curl is tried with the same
+URL and headers (nasdaq_http); a refusal from curl stops the run.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -20,14 +22,12 @@ URLS = {"forecast": "https://api.nasdaq.com/api/analyst/{ticker}/earnings-foreca
         "surprise": "https://api.nasdaq.com/api/company/{ticker}/earnings-surprise"}
 REFUSED = (401, 403, 406, 429)
 
-
-def fetch(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        return r.read()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import nasdaq_http  # noqa: E402
 
 
-def collect(tickers: list[str], evidence: Path, index: dict, *, fetch=fetch, sleep=time.sleep, now=None) -> dict:
+def collect(tickers: list[str], evidence: Path, index: dict, *, fetch=None, sleep=time.sleep, now=None) -> dict:
+    fetch = fetch or nasdaq_http.Fetcher()
     out = evidence / "nasdaq-forecast"
     out.mkdir(parents=True, exist_ok=True)
     now = now or (lambda: datetime.now(timezone.utc).isoformat())
@@ -52,6 +52,8 @@ def collect(tickers: list[str], evidence: Path, index: dict, *, fetch=fetch, sle
             if not f.exists():
                 f.write_bytes(body)
             entry[kind] = {"url": url, "sha256": h, "fetched_at": now(), "file": f.name}
+            if getattr(fetch, "via", None) == "curl":
+                entry[kind].update(client="curl", urllib_refusal=fetch.urllib_refusal)
             sleep(0.3)
     return index
 

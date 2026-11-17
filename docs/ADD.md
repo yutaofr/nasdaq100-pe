@@ -268,7 +268,7 @@ TTM 最新季度结束距D≤180自然日，并须为来源当时最新四个连
 3. **币种。** 接口不给币种。发行人最近一期利润在 SEC 事实中仅以 USD 报告时沿用原有 USD 判定（同期并列本币与 USD 便利折算的不算）。2026-11-17 增加逐证券、逐响应的人工交叉核对路径：另一公开页面的当年及下一年美元每上市证券预测须与归档响应一致，保存来源、观察记录、股类说明、审核时间及证据哈希。构建时验证证券代码、预测内容哈希、证据文件哈希、FY1 期间及 EPS；新响应必须重新核对。该路径标记 `FORECAST_CURRENCY_CROSSCHECKED`，属于跨来源推断，不是 Nasdaq 的币种声明，不做汇率转换或 ADS 倍率调整。未满足任一路径仍为 `FORECAST_CURRENCY_UNVERIFIED`。会计口径校验独立保留。证据和局限见 `docs/acceptance/2026-11-17-fy1-currency.md`。
 4. **会计口径。** 接口没有口径字段。依据是同一来源、同一星号口径的已报告 EPS 与 SEC GAAP 稀释 EPS 的逐季对照，存入 `normalized_evidence`：2026-11-16 实测 97 只合格证券中 74 只至少一季与 GAAP 不同，18 只样本内与 GAAP 相同（带 `BASIS_EQUALS_GAAP_IN_SAMPLE`），5 只无可比的 GAAP 单季值（带 `BASIS_COMPARISON_UNAVAILABLE`）。据此把该序列记为供应商调整后口径（normalized）。**这是由数据对照得出的判断，不是来源的书面声明**；它也不等于各公司自己公布的 non-GAAP（例如 NVDA 的来源值低于 GAAP）。取不到对照响应时 `FORECAST_BASIS_UNVERIFIED`，不生成行。
 5. **新鲜度。** 来源没有修订日期，逐行带 `FORECAST_FRESHNESS_UNVERIFIED`；获取时间仍受周度 7 天政策约束。
-6. **使用条款。** 与已在使用的 NOCP 接口同属 Nasdaq 公开站点，`docs/data-feasibility.md` §5 对该站点自动采集的条款限制同样适用；仅限本机个人使用，遇 401/403/406/429 即停止，不重试、不绕过。
+6. **使用条款。** 与已在使用的 NOCP 接口同属 Nasdaq 公开站点，`docs/data-feasibility.md` §5 对该站点自动采集的条款限制同样适用；仅限本机个人使用，遇 401/403/406/429 即停止，不重试、不绕过。**2026-11-17 用户修订：**Python urllib 被这些状态码拒绝时，允许用 curl 以相同的 URL 和相同的两个请求头再请求一次（`scripts/nasdaq_http.py`）；curl 成功后本次运行改由 curl 请求，索引逐条记 `client=curl` 与 `urllib_refusal`；curl 也被拒则停止。不改请求头，不模仿浏览器，不处理验证码或质询，不换网络出口。原规则保留供追溯。
 
 **FY1人工路径。** 标准导入须逐证券保存原文预测期标签、下一财年判定依据、财年结束日、EPS均值、normalized证据、币种/股类、来源和获取截点。手工补录可以补接口缺口，但不豁免24小时获取政策；101只分数天录入不能成为同一日完整FY1。没有修订时间仍按SRD允许新获取现值并标记新鲜度未验证。单页出现normalized切换按钮不能证明另一个API字段具有该口径。
 

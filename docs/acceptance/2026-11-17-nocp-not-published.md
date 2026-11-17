@@ -27,3 +27,10 @@
 - `pytest`：377 通过，1 跳过；新增 3 个回归测试，修改前其中 2 个失败。
 - 用上面保存的真实 AAPL 响应离线核对：目标 2026-11-16 无收盘价、最新交易日 2026-11-13；目标 2026-11-13 得 356.27。
 - 没有对真实接口重跑采集器（上一次 urllib 请求被拒）。
+
+## 2026-11-17 追加：curl 容错
+
+- 06:46 UTC 用采集器重试 11-16：AAPL 仍为 HTTP 403，距上次被拒约 6.5 小时，不是短时限流。
+- 用户随后放行 curl 容错（原话“放行curl容错”），取代此前“先不改，被拒就停”的决定。
+- 新增 `scripts/nasdaq_http.py`，`collect_nocp.py` 与 `collect_fy1.py` 改用它：urllib 被 401/403/406/429 拒绝时用 curl 以相同 URL、相同两个请求头请求一次；成功后本次运行只用 curl，索引记 `client=curl` 与 `urllib_refusal`；curl 被拒即停；本机没有 curl 时维持原拒绝。
+- `collect_real_research.py` 里的 Nasdaq 请求未改。
