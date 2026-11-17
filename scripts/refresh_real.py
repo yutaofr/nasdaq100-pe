@@ -79,6 +79,9 @@ def main() -> None:
     nocp = run("采集 Nasdaq 官方收盘价", py + [str(HERE / "collect_nocp.py"), "--input", str(base), "--evidence", str(evidence),
                "--target-date", target, "--index", str(out / "nocp-index.json")]
                + [arg for value in a.nocp_response for arg in ("--response", value)], env)
+    if nocp.get("latest_published"):
+        raise SystemExit(f"Nasdaq 尚未发布 {target} 的官方收盘价（接口最新交易日为 {nocp['latest_published']}），"
+                         "已在第一只证券后停止（未导入、未发布）。这不是访问被拒；等来源发布后原样重跑即可。")
     if not nocp.get("with_close"):
         raise SystemExit(f"没有取到任何官方收盘价，已停止（未导入、未发布）。接口答复：{nocp.get('problems')}\n"
                          "HTTP 403/429 表示 Nasdaq 拒绝了本机的请求；重跑不保证恢复。"

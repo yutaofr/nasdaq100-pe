@@ -56,6 +56,15 @@ def parse_nocp(body: bytes, target: str) -> tuple[str | None, str]:
     return close, ""
 
 
+def latest_trade_date(body: bytes) -> str | None:
+    """Newest trade date (ISO) in a NOCP response, or None when it has no readable rows."""
+    try:
+        rows = json.loads(body)["data"]["nocp"]["nocpTable"]
+        return max(datetime.strptime(r["date"], "%m/%d/%Y").date() for r in rows).isoformat()
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
 def read_saved_response(path: Path, ticker: str, target: str) -> bytes:
     """Accept only an original NOCP response identifying the requested symbol/date."""
     body = path.read_bytes()
@@ -81,6 +90,7 @@ def main() -> None:
     tickers = [s["ticker"] for s in json.loads(args.input.read_text())["universe"]["securities"]]
     out = args.evidence / "nasdaq-nocp"
     out.mkdir(parents=True, exist_ok=True)
+    args.index.parent.mkdir(parents=True, exist_ok=True)   # before any request: a lost index wastes them all
     index = json.loads(args.index.read_text()) if args.index.exists() else {}
     saved = {}
     for item in args.response:
@@ -123,10 +133,16 @@ def main() -> None:
             if previous and not previous.get("close"):
                 index[t]["previous_failure"] = previous
         else:
+            latest = latest_trade_date(body)
+            if reason == "DATE_NOT_IN_RESPONSE" and latest and latest < args.target_date:
+                # Nasdaq has not posted the target day's close yet; every other symbol would answer the same.
+                index[t].update(reason="TARGET_DATE_NOT_PUBLISHED_YET", latest_date=latest)
+                break
             time.sleep(0.3)
     args.index.write_text(json.dumps(index, indent=1, sort_keys=True) + "\n")
     ok = sum(1 for v in index.values() if v.get("close"))
-    print(json.dumps({"tickers": len(tickers), "with_close": ok,
+    unpublished = [v["latest_date"] for v in index.values() if v.get("reason") == "TARGET_DATE_NOT_PUBLISHED_YET"]
+    print(json.dumps({"tickers": len(tickers), "with_close": ok, "latest_published": max(unpublished, default=None),
                       "problems": {k: v["reason"] for k, v in index.items() if not v.get("close")}}, indent=1))
 
 

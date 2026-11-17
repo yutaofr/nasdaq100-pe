@@ -88,3 +88,58 @@ def test_saved_response_is_imported_before_other_symbols_refuse(tmp_path, monkey
     assert result['AAPL']['reason'] == 'HTTP_403'
     assert 'MSFT' not in result
     assert len(calls) == 1
+
+
+class FakeResponse:
+    def __init__(self, body):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return self.body
+
+
+def test_target_date_not_yet_published_stops_after_first_symbol(tmp_path, monkeypatch, capsys):
+    basket = tmp_path / 'input.json'
+    basket.write_text(json.dumps({'universe': {'securities': [{'ticker': 'AAPL'}, {'ticker': 'MSFT'}]}}))
+    index = tmp_path / 'index.json'
+    monkeypatch.setattr(sys, 'argv', ['collect_nocp', '--input', str(basket), '--evidence', str(tmp_path),
+        '--target-date', '2026-11-16', '--index', str(index)])
+    calls = []
+    def latest_is_friday(req, **kwargs):
+        calls.append(req.full_url)
+        return FakeResponse(response(day='11/13/2026'))
+    monkeypatch.setattr(mod.urllib.request, 'urlopen', latest_is_friday)
+    monkeypatch.setattr(mod.time, 'sleep', lambda s: None)
+    mod.main()
+    result = json.loads(index.read_text())
+    assert result['AAPL']['reason'] == 'TARGET_DATE_NOT_PUBLISHED_YET'
+    assert result['AAPL']['latest_date'] == '2026-11-13'
+    assert result['AAPL']['close'] is None
+    assert 'MSFT' not in result
+    assert len(calls) == 1
+    assert json.loads(capsys.readouterr().out)['latest_published'] == '2026-11-13'
+
+
+def test_date_older_than_response_window_is_not_reported_as_unpublished():
+    assert mod.parse_nocp(response(day='11/13/2026'), '2026-11-02') == (None, 'DATE_NOT_IN_RESPONSE')
+
+
+def test_index_directory_is_created_before_any_request(tmp_path, monkeypatch):
+    basket = tmp_path / 'input.json'
+    basket.write_text(json.dumps({'universe': {'securities': [{'ticker': 'AAPL'}]}}))
+    index = tmp_path / 'research-2026-11-13' / 'index.json'
+    monkeypatch.setattr(sys, 'argv', ['collect_nocp', '--input', str(basket), '--evidence', str(tmp_path),
+        '--target-date', '2026-11-13', '--index', str(index)])
+    def fetch(req, **kwargs):
+        assert index.parent.is_dir(), 'index directory must exist before the first request'
+        return FakeResponse(response().replace(b'DASH Close', b'AAPL Close'))
+    monkeypatch.setattr(mod.urllib.request, 'urlopen', fetch)
+    monkeypatch.setattr(mod.time, 'sleep', lambda s: None)
+    mod.main()
+    assert json.loads(index.read_text())['AAPL']['close'] == '171.51'
